@@ -5,7 +5,7 @@
 */
 
 import React, { useState, useRef } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import jsPDF from 'jspdf';
 import { MAX_STORY_PAGES, BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, GENRES, ART_STYLES, TONES, LANGUAGES, ComicFace, Beat, Persona } from './types';
 import { Setup } from './Setup';
@@ -71,7 +71,7 @@ const App: React.FC = () => {
   // Helper to always get a fresh instance with the selected key
   const getAI = () => {
     const key = import.meta.env.VITE_GEMINI_API_KEY || (window as any).aistudio?.getSelectedApiKey?.();
-    return new GoogleGenAI({ apiKey: key });
+    return new GoogleGenerativeAI(key);
   };
 
   const handleAPIError = (e: any) => {
@@ -225,9 +225,10 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 `;
     try {
         const res = await runWithFallback((model) => 
-            model.generateContent({ contents: prompt, config: { responseMimeType: 'application/json' } })
+            model.generateContent(prompt)
         );
-        let rawText = res.text || "{}";
+        const response = await res.response;
+        let rawText = response.text() || "{}";
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         
         const parsed = JSON.parse(rawText);
@@ -260,12 +261,10 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       const style = selectedGenre === 'Custom' ? "Modern American comic book art" : `${selectedGenre} comic`;
       try {
           const res = await runWithFallback((model) => 
-              model.generateContent({
-                  contents: { text: `STYLE: Masterpiece ${style} character sheet, detailed ink, neutral background. FULL BODY. Character: ${desc}` },
-                  config: { imageConfig: { aspectRatio: '1:1' } }
-              })
+              model.generateContent(`STYLE: Masterpiece ${style} character sheet, detailed ink, neutral background. FULL BODY. Character: ${desc}`)
           );
-          const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+          const response = await res.response;
+          const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
           if (part?.inlineData?.data) return { base64: part.inlineData.data, desc };
           throw new Error("Failed");
       } catch (e) { 
@@ -305,12 +304,10 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 
     try {
         const res = await runWithFallback((model) => 
-            model.generateContent({
-                contents: contents,
-                config: { imageConfig: { aspectRatio: '2:3' } }
-            })
+            model.generateContent(contents)
         );
-        const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        const response = await res.response;
+        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
     } catch (e) { 
         handleAPIError(e);
