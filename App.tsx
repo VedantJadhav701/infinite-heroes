@@ -16,9 +16,10 @@ import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
 // --- Constants ---
-const MODEL_V3 = "gemini-3-pro-image-preview";
-const MODEL_IMAGE_GEN_NAME = MODEL_V3;
-const MODEL_TEXT_NAME = MODEL_V3;
+const MODEL_TEXT = "gemini-1.5-flash";
+const MODEL_IMAGE = "gemini-1.5-flash"; // Using flash for both if image generation is supported, or keeping image model if specific.
+const MODEL_IMAGE_GEN_NAME = MODEL_IMAGE;
+const MODEL_TEXT_NAME = MODEL_TEXT;
 
 const App: React.FC = () => {
   // --- Auth State ---
