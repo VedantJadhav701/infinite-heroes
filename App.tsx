@@ -28,6 +28,7 @@ const STORY_FALLBACK: Beat[] = [
 ];
 
 const BASE_STYLE = "Masterpiece anime manga style, high contrast ink, detailed cinematic lighting, speed lines, dramatic shadows";
+const FALLBACK_IMAGE_SVG = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='768' height='768' viewBox='0 0 768 768'%3E%3Crect width='100%25' height='100%25' fill='%23222222'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='40' font-weight='bold' fill='%23ff5555' dominant-baseline='middle' text-anchor='middle'%3EIMAGE FAILED%3C/text%3E%3C/svg%3E";
 
 // --- Ironclad Pipeline Utilities ---
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -39,7 +40,7 @@ const MAX_CONCURRENT = 2;
 function sanitizePrompt(raw: string) {
   return raw
     .replace(/\s+/g, " ")
-    .replace(/, ,+/g, ", ") // Remove double commas
+    .replace(/,\s*,/g, ',') // Kill double commas or weird spacing
     .replace(/[^a-zA-Z0-9 ,.-]/g, " ")
     .trim()
     .slice(0, 200);
@@ -218,12 +219,39 @@ Output ONLY JSON.
       return { base64: imageUrl, desc };
   };
 
+  const loadSecureImage = async (url: string): Promise<HTMLImageElement> => {
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            referrerPolicy: 'no-referrer',
+            headers: { 'Accept': 'image/*' }
+        });
+        if (!response.ok) throw new Error(`Cloudflare block: ${response.status}`);
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                resolve(img);
+                URL.revokeObjectURL(localUrl);
+            };
+            img.onerror = () => reject(new Error("Decode failed"));
+            img.src = localUrl;
+        });
+    } catch (e) {
+        console.error("Stealth Fetch Failed:", e);
+        const fallback = new Image();
+        fallback.src = FALLBACK_IMAGE_SVG;
+        return new Promise(resolve => { fallback.onload = () => resolve(fallback); });
+    }
+  };
+
   const generateImage = async (panel: Panel): Promise<string> => {
     const heroDesc = heroRef.current?.desc || "anime hero warrior";
     const costarDesc = friendRef.current?.desc || "anime sidekick ally";
     const charAnchor = panel.focus_char === 'hero' ? heroDesc : (panel.focus_char === 'friend' ? costarDesc : "");
     
-    // Cleanup: Ensure no empty segments or double commas
     const segments = [BASE_STYLE, panel.camera || "medium shot", panel.mood || "intense mood", charAnchor, panel.scene];
     const rawPrompt = segments.filter(s => s && s.trim()).join(", ");
     const prompt = sanitizePrompt(rawPrompt);
@@ -250,24 +278,9 @@ Output ONLY JSON.
 
       for (let i = 0; i < panels.length; i++) {
           const url = await generateImage(panels[i]);
-          const img = new Image();
-          img.crossOrigin = "anonymous";
-          
-          try {
-              await new Promise((resolve, reject) => {
-                  img.onload = resolve;
-                  img.onerror = reject;
-                  img.src = url;
-              });
-              panelImages.push(img);
-          } catch (e) {
-              console.warn("Panel failed, using color block", e);
-              const placeholder = new Image();
-              placeholder.src = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==`; // 1x1 grey
-              await new Promise(r => placeholder.onload = r);
-              panelImages.push(placeholder);
-          }
-          await delay(800); // Respect rate limits
+          const img = await loadSecureImage(url);
+          panelImages.push(img);
+          await delay(800);
       }
 
       const w = canvas.width;
