@@ -18,3 +18,17 @@ View your app in AI Studio: https://ai.studio/apps/f918a410-e6c5-4cf9-8785-a1c84
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## ✨ Features
+
+- **Interactive Hero Experience**: Engage with infinite heroes in a dynamically generated environment.
+- **AI-Powered Storytelling**: Leveraging Gemini for rich, procedural content.
+- **Premium UI**: Sleek, modern interface with glassmorphism and smooth animations.
+- **Real-time Interaction**: Instant feedback and fluid transitions.
+
+## 🛠️ Tech Stack
+
+- **Frontend**: React, TypeScript, Vite
+- **Styling**: Vanilla CSS with modern Flexbox/Grid
+- **AI Integration**: Google Gemini API
+- **Design**: Premium aesthetics and responsive layout
