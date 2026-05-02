@@ -27,6 +27,10 @@ const STORY_FALLBACK = [
 ];
 
 const App: React.FC = () => {
+  // --- Generation State ---
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [dailyCount, setDailyCount] = useState(0);
+  const MAX_DAILY = 5;
   // --- Auth State ---
   const [session, setSession] = useState<Session | null>(null);
 
@@ -249,6 +253,33 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 };
 
   /**
+   * Generates the ENTIRE story in one single API call (Phase 3)
+   */
+  const generateFullStory = async (userPrompt: string): Promise<Beat[]> => {
+      const prompt = `
+Generate a 5-page comic book story based on: "${userPrompt}".
+Return a JSON array of exactly 5 objects. Each object MUST have:
+{
+  "scene": "Visual description of the action (Short & Punchy)",
+  "caption": "Narrative text for the box",
+  "dialogue": "Character speech bubble text (Keep it short)",
+  "focus_char": "hero" or "friend" or "other"
+}
+Output ONLY the JSON array. No extra text.
+`;
+      try {
+          const res = await runGemini(m => m.generateContent(prompt));
+          const response = await res.response;
+          let text = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+          const beats = JSON.parse(text);
+          return Array.isArray(beats) ? beats.slice(0, 5) : STORY_FALLBACK;
+      } catch (e) {
+          console.warn("Full story gen failed, using fallback", e);
+          return STORY_FALLBACK;
+      }
+  };
+
+  /**
    * Generates a character persona (base64 image and description) based on a text prompt.
    * @param desc The description of the persona to generate.
    * @returns A promise that resolves to a Persona object.
@@ -350,7 +381,10 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       updateFaceState(faceId, { imageUrl: url, isLoading: false });
   };
 
-  const generateBatch = async (startPage: number, count: number) => {
+  const generateBatch = async (startPage: number, count: number, preGeneratedBeats?: Beat[]) => {
+      if (isGenerating) return;
+      setIsGenerating(true);
+
       const pagesToGen: number[] = [];
       for (let i = 0; i < count; i++) {
           const p = startPage + i;
@@ -359,43 +393,51 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           }
       }
       
-      if (pagesToGen.length === 0) return;
+      if (pagesToGen.length === 0) { setIsGenerating(false); return; }
       pagesToGen.forEach(p => generatingPages.current.add(p));
 
-      const newFaces: ComicFace[] = [];
-      pagesToGen.forEach(pageNum => {
-          const type = pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story';
-          newFaces.push({ id: `page-${pageNum}`, type, choices: [], isLoading: true, pageIndex: pageNum });
-      });
-
-      setComicFaces(prev => {
-          const existing = new Set(prev.map(f => f.id));
-          return [...prev, ...newFaces.filter(f => !existing.has(f.id))];
-      });
-      newFaces.forEach(f => { if (!historyRef.current.find(h => h.id === f.id)) historyRef.current.push(f); });
+      // Phase 5: Check limits
+      if (dailyCount >= MAX_DAILY) {
+          alert("You've reached the free daily limit (5 comics). Come back tomorrow!");
+          setIsGenerating(false);
+          return;
+      }
 
       try {
-          // Phase 1: Sequential Pipeline with Rate Limiting
-          for (const pageNum of pagesToGen) {
-              const type = pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story';
-              await generateSinglePage(`page-${pageNum}`, pageNum, type);
+          // Phase 1: Sequential Pipeline
+          for (let i = 0; i < pagesToGen.length; i++) {
+              const pageNum = pagesToGen[i];
+              const type = pageNum === BACK_COVER_PAGE ? 'back_cover' : (pageNum === 1 ? 'cover' : 'story');
               
-              // Mandatory recovery delay to avoid API throttling
+              // Add face to state if it doesn't exist
+              setComicFaces(prev => {
+                  if (prev.find(f => f.id === `page-${pageNum}`)) return prev;
+                  return [...prev, { id: `page-${pageNum}`, type, choices: [], isLoading: true, pageIndex: pageNum }];
+              });
+
+              // Apply pre-generated beat or fallback
+              if (preGeneratedBeats && preGeneratedBeats[i]) {
+                  updateFaceState(`page-${pageNum}`, { narrative: preGeneratedBeats[i] });
+              }
+
+              await generateSinglePage(`page-${pageNum}`, pageNum, type);
               await new Promise(r => setTimeout(r, 2000));
               
-              generatingPages.current.delete(pageNum);
               setGenProgress(prev => ({ ...prev, current: prev.current + 1 }));
           }
           
+          setDailyCount(prev => prev + 1);
           if (pagesToGen.includes(BACK_COVER_PAGE)) {
               saveComicToDatabase(historyRef.current);
           }
       } catch (e) {
           console.error("Batch generation error", e);
       } finally {
+          setIsGenerating(false);
           pagesToGen.forEach(p => generatingPages.current.delete(p));
       }
-  }
+  };
+
 
   const launchStory = async () => {
     // --- API KEY VALIDATION ---
