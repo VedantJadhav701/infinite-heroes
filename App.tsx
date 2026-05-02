@@ -258,12 +258,14 @@ Output ONLY JSON.
     }
   };
 
-  const generateImage = async (panel: Panel): Promise<string> => {
+  const generateImage = async (panel: Panel, idx: number, pageNum: number): Promise<string> => {
     const heroDesc = heroRef.current?.desc || "anime hero warrior";
     const costarDesc = friendRef.current?.desc || "anime sidekick ally";
     const charAnchor = panel.focus_char === 'hero' ? heroDesc : (panel.focus_char === 'friend' ? costarDesc : "");
     
-    const segments = [BASE_STYLE, panel.camera || "medium shot", panel.mood || "intense mood", charAnchor, panel.scene];
+    // Inject page and panel index to force AI diversity and bypass caching
+    const entropySegment = `angle_${idx}_p${pageNum}`;
+    const segments = [BASE_STYLE, panel.camera || "medium shot", panel.mood || "intense mood", charAnchor, panel.scene, entropySegment];
     const rawPrompt = segments.filter(s => s && s.trim()).join(", ");
     const prompt = sanitizePrompt(rawPrompt);
     const key = prompt.toLowerCase();
@@ -277,74 +279,109 @@ Output ONLY JSON.
     return url;
   };
 
-  const composePage = async (beat: Beat): Promise<string> => {
+  const composePage = async (beat: Beat, pageNum: number): Promise<string> => {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
       canvas.height = 1536;
       const ctx = canvas.getContext('2d');
       if (!ctx) return '';
 
+      // 1. Paper Texture Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       const panels = beat.panels.slice(0, 4);
       const panelImages = [];
 
       for (let i = 0; i < panels.length; i++) {
-          const prompt = await generateImage(panels[i]);
+          const prompt = await generateImage(panels[i], i, pageNum);
           const img = await loadSecureImage(prompt);
           panelImages.push(img);
           await delay(800);
       }
 
-      const w = canvas.width;
-      const h = canvas.height;
-      const positions = [[0, 0], [w/2, 0], [0, h/2], [w/2, h/2]];
+      const gutter = 16;
+      const w = canvas.width - (gutter * 3);
+      const h = canvas.height - (gutter * 3);
+      const pW = w / 2;
+      const pH = h / 2;
 
       panelImages.forEach((img, i) => {
-          const [x, y] = positions[i];
+          const col = i % 2;
+          const row = Math.floor(i / 2);
+          const x = gutter + col * (pW + gutter);
+          const y = gutter + row * (pH + gutter);
           const panel = panels[i];
           
-          // Draw Image
-          ctx.drawImage(img, x, y, w/2, h/2);
+          // Draw Image with high-quality fit
+          ctx.drawImage(img, x, y, pW, pH);
           
-          // Panel Border
+          // Heavy Comic Border
           ctx.strokeStyle = "black";
-          ctx.lineWidth = 10;
-          ctx.strokeRect(x, y, w/2, h/2);
+          ctx.lineWidth = 8;
+          ctx.strokeRect(x, y, pW, pH);
 
-          // 1. Caption (Top Yellow Box)
+          // 1. Caption (Modern Narrative Box)
           if (panel.caption) {
-              ctx.fillStyle = "rgba(255, 255, 0, 0.9)";
-              ctx.fillRect(x + 10, y + 10, w/2 - 20, 40);
+              ctx.font = "bold 20px 'Comic Neue'";
+              const text = panel.caption.toUpperCase();
+              const metrics = ctx.measureText(text);
+              const boxW = Math.min(pW - 20, metrics.width + 30);
+              
+              ctx.fillStyle = "rgba(255, 240, 0, 0.95)"; // Traditional Comic Yellow
+              ctx.fillRect(x + 5, y + 5, boxW, 40);
+              ctx.strokeStyle = "black";
+              ctx.lineWidth = 3;
+              ctx.strokeRect(x + 5, y + 5, boxW, 40);
+              
+              ctx.fillStyle = "black";
+              ctx.textAlign = "left";
+              ctx.fillText(text, x + 15, y + 32, boxW - 20);
+          }
+
+          // 2. SFX (Dynamic Boom!)
+          if (panel.sfx) {
+              ctx.save();
+              ctx.translate(x + pW/2, y + pH/2);
+              ctx.rotate((Math.random() - 0.5) * 0.3);
+              ctx.font = "bold 72px Bangers";
+              ctx.textAlign = "center";
+              // Shadow/Stroke
+              ctx.strokeStyle = "black";
+              ctx.lineWidth = 10;
+              ctx.strokeText(panel.sfx, 0, 0);
+              // Inner Glow
+              ctx.fillStyle = (i % 2 === 0) ? "#FF0000" : "#FF6600";
+              ctx.fillText(panel.sfx, 0, 0);
+              ctx.restore();
+          }
+
+          // 3. Dialogue (Sleek Bottom Bubble)
+          if (panel.dialogue) {
+              ctx.font = "italic 18px 'Comic Neue'";
+              const dText = `"${panel.dialogue}"`;
+              const dMetrics = ctx.measureText(dText);
+              const dBoxW = Math.min(pW - 40, dMetrics.width + 40);
+              
+              ctx.fillStyle = "white";
               ctx.strokeStyle = "black";
               ctx.lineWidth = 2;
-              ctx.strokeRect(x + 10, y + 10, w/2 - 20, 40);
+              
+              const dX = x + (pW - dBoxW) / 2;
+              const dY = y + pH - 60;
+              
+              ctx.beginPath();
+              ctx.roundRect(dX, dY, dBoxW, 45, 15);
+              ctx.fill();
+              ctx.stroke();
+              
               ctx.fillStyle = "black";
-              ctx.font = "bold 16px 'Comic Neue'";
-              ctx.fillText(panel.caption.slice(0, 40), x + 20, y + 35);
-          }
-
-          // 2. Dialogue (White Bubble)
-          if (panel.dialogue) {
-              ctx.fillStyle = "white";
-              ctx.fillRect(x + 30, y + h/4, w/2 - 60, 60);
-              ctx.strokeStyle = "black";
-              ctx.strokeRect(x + 30, y + h/4, w/2 - 60, 60);
-              ctx.fillStyle = "black";
-              ctx.font = "bold 18px Arial";
-              ctx.fillText(panel.dialogue.slice(0, 35), x + 40, y + h/4 + 35);
-          }
-
-          // 3. SFX (Bold Comic Text)
-          if (panel.sfx) {
-              ctx.fillStyle = "red";
-              ctx.font = "bold 50px Bangers";
-              ctx.shadowColor = "yellow";
-              ctx.shadowBlur = 10;
-              ctx.fillText(panel.sfx, x + 50, y + h/2 - 50);
-              ctx.shadowBlur = 0; // reset
+              ctx.textAlign = "center";
+              ctx.fillText(dText, x + pW/2, dY + 28, dBoxW - 20);
           }
       });
 
-      return canvas.toDataURL("image/jpeg", 0.9);
+      return canvas.toDataURL("image/jpeg", 0.95);
   };
 
   const updateFaceState = (id: string, updates: Partial<ComicFace>) => {
@@ -362,7 +399,7 @@ Output ONLY JSON.
       let beat: Beat = providedBeat || { panels: [{ scene: "A mysterious scene", focus_char: 'other' }], choices: [] };
 
       updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision, isLoading: true });
-      const url = await composePage(beat);
+      const url = await composePage(beat, pageNum);
       updateFaceState(faceId, { imageUrl: url, isLoading: false });
   };
 
