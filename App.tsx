@@ -70,7 +70,8 @@ const App: React.FC = () => {
   // --- AI Helpers ---
   // Helper to always get a fresh instance with the selected key
   const getAI = () => {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const key = import.meta.env.VITE_GEMINI_API_KEY || (window as any).aistudio?.getSelectedApiKey?.();
+    return new GoogleGenAI({ apiKey: key });
   };
 
   const handleAPIError = (e: any) => {

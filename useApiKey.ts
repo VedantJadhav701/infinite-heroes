@@ -16,6 +16,11 @@ export const useApiKey = () => {
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
 
   const validateApiKey = useCallback(async (): Promise<boolean> => {
+    // Check if key is provided via environment variable (standard SaaS approach)
+    if (import.meta.env.VITE_GEMINI_API_KEY) {
+      return true;
+    }
+
     const aistudio = (window as any).aistudio as AIStudio | undefined;
     
     // If the environment supports key selection
