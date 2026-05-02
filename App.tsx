@@ -282,27 +282,19 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendRef.current.base64 } });
     }
 
-    const styleEra = selectedStyle;
-    let promptText = `STYLE: ${styleEra} comic book art, detailed ink, vibrant colors. `;
-    
-    if (type === 'cover') {
-        const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
-        promptText += `TYPE: Comic Book Cover. TITLE: "INFINITE HEROES" (OR LOCALIZED TRANSLATION IN ${langName.toUpperCase()}). Main visual: Dynamic action shot of [HERO] (Use REFERENCE 1).`;
-    } else if (type === 'back_cover') {
-        promptText += `TYPE: Comic Back Cover. FULL PAGE VERTICAL ART. Dramatic teaser. Text: "NEXT ISSUE SOON".`;
-    } else {
-        promptText += `TYPE: Vertical comic panel. SCENE: ${beat.scene}. `;
-        promptText += `INSTRUCTIONS: Maintain strict character likeness. If scene mentions 'HERO', you MUST use REFERENCE 1. If scene mentions 'CO-STAR' or 'SIDEKICK', you MUST use REFERENCE 2.`;
-        
-        if (beat.caption) promptText += ` INCLUDE CAPTION BOX: "${beat.caption}"`;
-        if (beat.dialogue) promptText += ` INCLUDE SPEECH BUBBLE: "${beat.dialogue}"`;
-    }
-
-    contents.push({ text: promptText });
-
     const seed = Math.floor(Math.random() * 1000000);
     const styleEra = encodeURIComponent(selectedStyle);
-    const scenePrompt = encodeURIComponent(beat.scene);
+    
+    let sceneDesc = beat.scene;
+    if (type === 'cover') {
+        const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
+        sceneDesc = `Comic Book Cover. TITLE: "INFINITE HEROES" (OR LOCALIZED TRANSLATION IN ${langName.toUpperCase()}). Main visual: Dynamic action shot of HERO.`;
+    } else if (type === 'back_cover') {
+        sceneDesc = `Comic Back Cover. FULL PAGE VERTICAL ART. Dramatic teaser. Text: "NEXT ISSUE SOON".`;
+    }
+
+    const scenePrompt = encodeURIComponent(sceneDesc);
+
     const prompt = `Comic book art, ${styleEra} style, ${scenePrompt}, detailed ink, vibrant colors`;
     const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=1024&height=1536&model=flux&nologo=true`;
 
