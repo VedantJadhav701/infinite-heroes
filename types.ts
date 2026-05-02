@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-export const MAX_STORY_PAGES = 10;
-export const BACK_COVER_PAGE = 11;
-export const TOTAL_PAGES = 11;
+export const MAX_STORY_PAGES = 6;
+export const BACK_COVER_PAGE = 7;
+export const TOTAL_PAGES = 7;
 export const INITIAL_PAGES = 2;
 export const GATE_PAGE = 2;
-export const BATCH_SIZE = 6;
+export const BATCH_SIZE = 4;
 export const DECISION_PAGES = [3];
 
 export const GENRES = ["Classic Horror", "Superhero Action", "Dark Sci-Fi", "High Fantasy", "Neon Noir Detective", "Wasteland Apocalypse", "Lighthearted Comedy", "Teen Drama / Slice of Life", "Custom"];
