@@ -16,14 +16,9 @@ import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
 // --- Constants ---
-const DEFAULT_TEXT_MODEL = "gemini-1.5-flash";
-const DEFAULT_IMAGE_MODEL = "gemini-1.5-flash";
+const STORY_MODEL = "gemini-1.5-flash";
 
 const App: React.FC = () => {
-  // --- AI Model State ---
-  const [availableModels, setAvailableModels] = useState<any[]>([]);
-  const [bestTextModel, setBestTextModel] = useState(DEFAULT_TEXT_MODEL);
-  const [bestImageModel, setBestImageModel] = useState(DEFAULT_IMAGE_MODEL);
   // --- Auth State ---
   const [session, setSession] = useState<Session | null>(null);
 
@@ -39,37 +34,6 @@ const App: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
-
-  // --- Discovery Logic ---
-  React.useEffect(() => {
-    const discoverModels = async () => {
-        try {
-            const ai = getAI();
-            const modelsResult = await ai.listModels();
-            const models = modelsResult.models || [];
-            setAvailableModels(models);
-
-            // Filter for models that support generateContent
-            const textModels = models.filter(m => m.supportedGenerationMethods.includes('generateContent'));
-            
-            // Pick best Flash for text
-            const flash = textModels.find(m => m.name.includes('flash') && !m.name.includes('8b'));
-            const flash8b = textModels.find(m => m.name.includes('flash-8b'));
-            const pro = textModels.find(m => m.name.includes('pro'));
-            
-            const selectedText = flash?.name || flash8b?.name || pro?.name || DEFAULT_TEXT_MODEL;
-            setBestTextModel(selectedText.replace('models/', ''));
-            
-            // For images, prioritize models with multimodal/large context or specific names
-            setBestImageModel(selectedText.replace('models/', ''));
-            
-            console.log("🚀 AI Discovery Complete. Best Model:", selectedText);
-        } catch (e) {
-            console.warn("Model discovery failed, using defaults.", e);
-        }
-    };
-    if (import.meta.env.VITE_GEMINI_API_KEY) discoverModels();
   }, []);
 
   // --- API Key Hook ---
@@ -130,14 +94,13 @@ const App: React.FC = () => {
     });
   };
 
-  const runWithFallback = async (task: 'text' | 'image', method: (model: any) => Promise<any>) => {
+  const runGemini = async (method: (model: any) => Promise<any>) => {
       const ai = getAI();
-      const mName = task === 'text' ? bestTextModel : bestImageModel;
       try {
-          const model = ai.getGenerativeModel({ model: mName });
+          const model = ai.getGenerativeModel({ model: STORY_MODEL });
           return await method(model);
       } catch (e) {
-          console.error(`Dynamic Model ${mName} failed.`, e);
+          console.error(`Gemini Error:`, e);
           throw e;
       }
   };
@@ -254,7 +217,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 }
 `;
     try {
-        const res = await runWithFallback('text', (model) => 
+        const res = await runGemini((model) => 
             model.generateContent(prompt)
         );
         const response = await res.response;
@@ -288,18 +251,23 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
    * @returns A promise that resolves to a Persona object.
    */
   const generatePersona = async (desc: string): Promise<Persona> => {
+      const seed = Math.floor(Math.random() * 1000000);
       const style = selectedGenre === 'Custom' ? "Modern American comic book art" : `${selectedGenre} comic`;
+      const prompt = encodeURIComponent(`Masterpiece anime character sheet, ${style}, detailed, full body, ${desc}`);
+      const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=512&height=512&model=flux&nologo=true`;
+      
       try {
-          const res = await runWithFallback('image', (model) => 
-              model.generateContent(`STYLE: Masterpiece ${style} character sheet, detailed ink, neutral background. FULL BODY. Character: ${desc}`)
-          );
-          const response = await res.response;
-          const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-          if (part?.inlineData?.data) return { base64: part.inlineData.data, desc };
-          throw new Error("Failed");
-      } catch (e) { 
-        handleAPIError(e);
-        throw e; 
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+          const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+              reader.readAsDataURL(blob);
+          });
+          return { base64, desc };
+      } catch (e) {
+          console.error("Persona image gen failed", e);
+          throw e;
       }
   };
 
@@ -332,15 +300,22 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 
     contents.push({ text: promptText });
 
+    const seed = Math.floor(Math.random() * 1000000);
+    const styleEra = encodeURIComponent(selectedStyle);
+    const scenePrompt = encodeURIComponent(beat.scene);
+    const prompt = `Comic book art, ${styleEra} style, ${scenePrompt}, detailed ink, vibrant colors`;
+    const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=1024&height=1536&model=flux&nologo=true`;
+
     try {
-        const res = await runWithFallback('image', (model) => 
-            model.generateContent(contents)
-        );
-        const response = await res.response;
-        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-        return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        return await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+        });
     } catch (e) { 
-        handleAPIError(e);
+        console.error("Panel image gen failed", e);
         return ''; 
     }
   };
