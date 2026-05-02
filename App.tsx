@@ -20,11 +20,24 @@ const STORY_MODEL = "llama3-70b-8192";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const STORY_FALLBACK: Beat[] = [
-    { panels: [{ scene: "Hero awakens", caption: "The awakening.", focus_char: 'hero' }], choices: [] },
-    { panels: [{ scene: "Villain appears", caption: "A threat emerges.", focus_char: 'friend' }], choices: [] },
-    { panels: [{ scene: "Battle", caption: "Steel met steel.", focus_char: 'hero' }], choices: [] },
-    { panels: [{ scene: "Struggle", caption: "Pushed to the limit.", focus_char: 'hero' }], choices: [] },
-    { panels: [{ scene: "Victory", caption: "POW!", focus_char: 'hero' }], choices: [] }
+    { 
+        panels: [
+            { scene: "A hero stands atop a skyscraper, cape flowing in the wind", caption: "THE CITY SLEEPS, BUT EVIL NEVER DOES.", focus_char: 'hero', camera: "wide", mood: "intense", sfx: "WHOOSH" },
+            { scene: "Close up of a mysterious glowing artifact on a pedestal", caption: "THE RELIC PULSES WITH AN ANCIENT ENERGY.", focus_char: 'other', camera: "close-up", mood: "dark", sfx: "HUMMM" },
+            { scene: "A dark alleyway where a shadow lurks", caption: "SOMETHING IS WATCHING FROM THE DARKNESS.", focus_char: 'other', camera: "medium", mood: "dark", sfx: "SKRITCH" },
+            { scene: "Hero jumping from the roof into the alley", caption: "TIME TO END THIS.", focus_char: 'hero', camera: "wide", mood: "intense", sfx: "KRAK!" }
+        ], 
+        choices: [] 
+    },
+    { 
+        panels: [
+            { scene: "Hero fighting a robotic guard in a high-tech lab", caption: "THE INFILTRATION WAS DISCOVERED.", focus_char: 'hero', camera: "medium", mood: "intense", sfx: "CLANG!" },
+            { scene: "The sidekick hacking a terminal with sparks flying", caption: "JUST A FEW MORE SECONDS...", focus_char: 'friend', camera: "close-up", mood: "calm", sfx: "BEEP" },
+            { scene: "A giant explosion behind the hero", caption: "TOO LATE!", focus_char: 'hero', camera: "wide", mood: "intense", sfx: "BOOOOM!" },
+            { scene: "Hero and sidekick escaping through a portal", caption: "NEXT TIME, WE'LL BE READY.", focus_char: 'hero', camera: "medium", mood: "intense", sfx: "ZZZAP!" }
+        ], 
+        choices: [] 
+    }
 ];
 
 const BASE_STYLE = "Masterpiece anime manga style, high contrast ink, detailed cinematic lighting, speed lines, dramatic shadows";
