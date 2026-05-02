@@ -279,6 +279,34 @@ Output ONLY JSON.
     return url;
   };
 
+  // --- Comic Rendering Utilities ---
+  const drawSpeechBubble = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, tailX: number, tailY: number) => {
+      const radius = 20;
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + h - radius);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+      
+      // The Tail
+      ctx.lineTo(tailX + 20, y + h);
+      ctx.lineTo(tailX, tailY);
+      ctx.lineTo(tailX - 10, y + h);
+      
+      ctx.lineTo(x + radius, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      
+      ctx.fillStyle = "white";
+      ctx.fill();
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+  };
+
   const composePage = async (beat: Beat, pageNum: number): Promise<string> => {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
@@ -321,63 +349,79 @@ Output ONLY JSON.
           ctx.lineWidth = 8;
           ctx.strokeRect(x, y, pW, pH);
 
-          // 1. Caption (Modern Narrative Box)
+          // 1. ELITE CAPTION (Top Left Box)
           if (panel.caption) {
-              ctx.font = "bold 20px 'Comic Neue'";
+              ctx.font = "bold 18px 'Comic Neue'";
               const text = panel.caption.toUpperCase();
               const metrics = ctx.measureText(text);
-              const boxW = Math.min(pW - 20, metrics.width + 30);
+              const boxW = Math.min(pW - 40, metrics.width + 20);
               
-              ctx.fillStyle = "rgba(255, 240, 0, 0.95)"; // Traditional Comic Yellow
-              ctx.fillRect(x + 5, y + 5, boxW, 40);
+              ctx.fillStyle = "white";
+              ctx.fillRect(x, y, boxW, 35);
               ctx.strokeStyle = "black";
               ctx.lineWidth = 3;
-              ctx.strokeRect(x + 5, y + 5, boxW, 40);
+              ctx.strokeRect(x, y, boxW, 35);
               
               ctx.fillStyle = "black";
               ctx.textAlign = "left";
-              ctx.fillText(text, x + 15, y + 32, boxW - 20);
+              ctx.fillText(text, x + 10, y + 25, boxW - 20);
           }
 
-          // 2. SFX (Dynamic Boom!)
+          // 2. DYNAMIC SFX (The "POW!" Factor)
           if (panel.sfx) {
               ctx.save();
-              ctx.translate(x + pW/2, y + pH/2);
-              ctx.rotate((Math.random() - 0.5) * 0.3);
-              ctx.font = "bold 72px Bangers";
+              ctx.translate(x + pW/2, y + pH/3);
+              ctx.rotate((Math.random() - 0.5) * 0.4);
+              ctx.font = "italic bold 80px Bangers";
               ctx.textAlign = "center";
-              // Shadow/Stroke
+              // Deep Stroke
               ctx.strokeStyle = "black";
-              ctx.lineWidth = 10;
+              ctx.lineWidth = 12;
               ctx.strokeText(panel.sfx, 0, 0);
-              // Inner Glow
-              ctx.fillStyle = (i % 2 === 0) ? "#FF0000" : "#FF6600";
+              // Color Pop
+              ctx.fillStyle = i % 2 === 0 ? "#00FFFF" : "#FF00FF";
+              ctx.fillText(panel.sfx, 0, 0);
+              // Inner White highlight
+              ctx.fillStyle = "white";
+              ctx.font = "italic bold 76px Bangers";
               ctx.fillText(panel.sfx, 0, 0);
               ctx.restore();
           }
 
-          // 3. Dialogue (Sleek Bottom Bubble)
+          // 3. AUTHENTIC SPEECH BUBBLE
           if (panel.dialogue) {
-              ctx.font = "italic 18px 'Comic Neue'";
-              const dText = `"${panel.dialogue}"`;
-              const dMetrics = ctx.measureText(dText);
-              const dBoxW = Math.min(pW - 40, dMetrics.width + 40);
+              ctx.font = "bold 16px 'Comic Neue'";
+              const dText = panel.dialogue.toUpperCase();
+              const words = dText.split(' ');
+              const lines = [];
+              let currentLine = "";
               
-              ctx.fillStyle = "white";
-              ctx.strokeStyle = "black";
-              ctx.lineWidth = 2;
-              
-              const dX = x + (pW - dBoxW) / 2;
-              const dY = y + pH - 60;
-              
-              ctx.beginPath();
-              ctx.roundRect(dX, dY, dBoxW, 45, 15);
-              ctx.fill();
-              ctx.stroke();
+              words.forEach(w => {
+                  if (ctx.measureText(currentLine + " " + w).width < pW - 80) {
+                      currentLine += (currentLine ? " " : "") + w;
+                  } else {
+                      lines.push(currentLine);
+                      currentLine = w;
+                  }
+              });
+              lines.push(currentLine);
+
+              const bW = pW * 0.75;
+              const bH = lines.length * 22 + 30;
+              const bX = x + (pW - bW) / 2;
+              const bY = y + 50;
+
+              // Pointer to character (simplified heuristic)
+              const tX = x + (panel.focus_char === 'hero' ? pW * 0.25 : pW * 0.75);
+              const tY = y + pH * 0.6;
+
+              drawSpeechBubble(ctx, bX, bY, bW, bH, tX, tY);
               
               ctx.fillStyle = "black";
               ctx.textAlign = "center";
-              ctx.fillText(dText, x + pW/2, dY + 28, dBoxW - 20);
+              lines.forEach((l, li) => {
+                  ctx.fillText(l, bX + bW/2, bY + 25 + li * 22);
+              });
           }
       });
 
