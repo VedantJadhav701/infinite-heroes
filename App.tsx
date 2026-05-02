@@ -16,8 +16,8 @@ import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
 // --- Constants ---
-const MODEL_TEXT = "gemini-1.5-flash";
-const MODEL_IMAGE = "gemini-1.5-flash"; // Using flash for both if image generation is supported, or keeping image model if specific.
+const MODEL_TEXT = "gemini-1.5-flash-latest"; // Using 'latest' alias for stability
+const MODEL_IMAGE = "gemini-1.5-flash-latest"; 
 const MODEL_IMAGE_GEN_NAME = MODEL_IMAGE;
 const MODEL_TEXT_NAME = MODEL_TEXT;
 
@@ -45,6 +45,7 @@ const App: React.FC = () => {
   const [hero, setHeroState] = useState<Persona | null>(null);
   const [friend, setFriendState] = useState<Persona | null>(null);
   const [selectedGenre, setSelectedGenre] = useState(GENRES[0]);
+  const [selectedStyle, setSelectedStyle] = useState(ART_STYLES[0]);
   const [selectedLanguage, setSelectedLanguage] = useState(LANGUAGES[0].code);
   const [customPremise, setCustomPremise] = useState("");
   const [storyTone, setStoryTone] = useState(TONES[0]);
@@ -151,7 +152,7 @@ const App: React.FC = () => {
     `;
 
     // BASE INSTRUCTION: Strictly enforce language for output text.
-    let instruction = `Continue the story. ALL OUTPUT TEXT (Captions, Dialogue, Choices) MUST BE IN ${langName.toUpperCase()}. ${coreDriver} ${guardrails}`;
+    let instruction = `Continue the story in the style of a ${selectedStyle} comic. ALL OUTPUT TEXT (Captions, Dialogue, Choices) MUST BE IN ${langName.toUpperCase()}. ${coreDriver} ${guardrails}`;
     if (richMode) {
         instruction += " RICH/NOVEL MODE ENABLED. Prioritize deeper character thoughts, descriptive captions, and meaningful dialogue exchanges over short punchlines.";
     }
@@ -268,7 +269,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendRef.current.base64 } });
     }
 
-    const styleEra = selectedGenre === 'Custom' ? "Modern American" : selectedGenre;
+    const styleEra = selectedStyle;
     let promptText = `STYLE: ${styleEra} comic book art, detailed ink, vibrant colors. `;
     
     if (type === 'cover') {
@@ -516,12 +517,14 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           hero={hero}
           friend={friend}
           selectedGenre={selectedGenre}
+          selectedStyle={selectedStyle}
           selectedLanguage={selectedLanguage}
           customPremise={customPremise}
           richMode={richMode}
           onHeroUpload={handleHeroUpload}
           onFriendUpload={handleFriendUpload}
           onGenreChange={setSelectedGenre}
+          onStyleChange={setSelectedStyle}
           onLanguageChange={setSelectedLanguage}
           onPremiseChange={setCustomPremise}
           onRichModeChange={setRichMode}

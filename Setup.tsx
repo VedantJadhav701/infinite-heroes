@@ -15,12 +15,14 @@ interface SetupProps {
     hero: Persona | null;
     friend: Persona | null;
     selectedGenre: string;
+    selectedStyle: string;
     selectedLanguage: string;
     customPremise: string;
     richMode: boolean;
-    onHeroUpload: (file: File) => void;
-    onFriendUpload: (file: File) => void;
+    onHeroUpload: (file: File | string) => void;
+    onFriendUpload: (file: File | string) => void;
     onGenreChange: (val: string) => void;
+    onStyleChange: (val: string) => void;
     onLanguageChange: (val: string) => void;
     onPremiseChange: (val: string) => void;
     onRichModeChange: (val: boolean) => void;
@@ -220,7 +222,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
 
                                 <div className="mb-2">
                                     <p className="font-comic text-base mb-1 font-bold text-gray-800">ART STYLE</p>
-                                    <select className="w-full font-comic text-lg p-1 border-2 border-black uppercase bg-white text-black cursor-pointer shadow-[3px_3px_0px_rgba(0,0,0,0.2)]">
+                                    <select value={props.selectedStyle} onChange={(e) => props.onStyleChange(e.target.value)} className="w-full font-comic text-lg p-1 border-2 border-black uppercase bg-white text-black cursor-pointer shadow-[3px_3px_0px_rgba(0,0,0,0.2)]">
                                         {ART_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
