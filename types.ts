@@ -77,12 +77,16 @@ export interface ComicFace {
   isDecisionPage?: boolean;
 }
 
-export interface Beat {
+export interface Panel {
+  scene: string;
   caption?: string;
   dialogue?: string;
-  scene: string;
-  choices: string[];
   focus_char: 'hero' | 'friend' | 'other';
+}
+
+export interface Beat {
+  panels: Panel[];
+  choices: string[];
 }
 
 export interface Persona {

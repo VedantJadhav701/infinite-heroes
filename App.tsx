@@ -19,13 +19,15 @@ import { Session } from '@supabase/supabase-js';
 const STORY_MODEL = "llama3-70b-8192";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-const STORY_FALLBACK = [
-    { scene: "Hero awakens mysterious power in a dark neon city", caption: "The transformation was sudden. The city's neon lights pulsed in sync with my heartbeat.", dialogue: "What... what is this power?", focus_char: "hero" },
-    { scene: "A mysterious villain in shadows appears and challenges the hero", caption: "From the darkness, a voice spoke. The rival had found me.", dialogue: "You think you're ready? You've barely scratched the surface.", focus_char: "friend" },
-    { scene: "An intense battle begins in a rainy alleyway", caption: "Steel met steel in the rain. Every move felt like instinct.", dialogue: "I won't let you destroy this city!", focus_char: "hero" },
-    { scene: "Hero struggles but finds new resolve", caption: "I was pushed to the limit. But then, I remembered why I started this.", dialogue: "I'm not finished yet!", focus_char: "hero" },
-    { scene: "Climactic final attack with a burst of light", caption: "One final strike. One chance to end it all.", dialogue: "POW!", focus_char: "hero" }
+const STORY_FALLBACK: Beat[] = [
+    { panels: [{ scene: "Hero awakens", caption: "The awakening.", focus_char: 'hero' }], choices: [] },
+    { panels: [{ scene: "Villain appears", caption: "A threat emerges.", focus_char: 'friend' }], choices: [] },
+    { panels: [{ scene: "Battle", caption: "Steel met steel.", focus_char: 'hero' }], choices: [] },
+    { panels: [{ scene: "Struggle", caption: "Pushed to the limit.", focus_char: 'hero' }], choices: [] },
+    { panels: [{ scene: "Victory", caption: "POW!", focus_char: 'hero' }], choices: [] }
 ];
+
+const BASE_STYLE = "Masterpiece anime manga style, high contrast ink, detailed cinematic lighting, speed lines, dramatic shadows";
 
 const App: React.FC = () => {
   // --- Generation State ---
@@ -144,21 +146,16 @@ const App: React.FC = () => {
    */
   const generateFullStory = async (userPrompt: string): Promise<Beat[]> => {
       const prompt = `
-Generate a 5-page comic book story based on: "${userPrompt}".
-Return a JSON object with a key "beats" containing exactly 5 objects. Each object MUST have:
-{
-  "scene": "Visual description of the action (Short & Punchy)",
-  "caption": "Narrative text for the box",
-  "dialogue": "Character speech bubble text (Keep it short)",
-  "focus_char": "hero" or "friend" or "other"
-}
-Output ONLY the JSON. No extra text.
+Generate a 5-page comic book story: "${userPrompt}".
+Each page MUST have 4 panels.
+Return a JSON object: { "pages": [ { "panels": [ { "scene": "...", "caption": "...", "dialogue": "...", "focus_char": "hero|friend|other" } ], "choices": [] } ] }
+Output ONLY JSON.
 `;
       try {
           const rawText = await runGroq(prompt);
           const data = JSON.parse(rawText);
-          const beats = data.beats || data;
-          return Array.isArray(beats) ? beats.slice(0, 5) : STORY_FALLBACK;
+          const pages = data.pages || data;
+          return Array.isArray(pages) ? pages.slice(0, 5) : STORY_FALLBACK;
       } catch (e) {
           console.warn("Full story gen failed, using fallback", e);
           return STORY_FALLBACK;
@@ -180,40 +177,64 @@ Output ONLY the JSON. No extra text.
       return { base64: imageUrl, desc };
   };
 
-  const generateImage = async (beat: Beat, type: ComicFace['type']): Promise<string> => {
-    const contents = [];
-    if (heroRef.current?.base64) {
-        contents.push({ text: "REFERENCE 1 [HERO]:" });
-        contents.push({ inlineData: { mimeType: 'image/jpeg', data: heroRef.current.base64 } });
-    }
-    if (friendRef.current?.base64) {
-        contents.push({ text: "REFERENCE 2 [CO-STAR]:" });
-        contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendRef.current.base64 } });
-    }
-
-    // Stable Seed for consistency
-    const seed = (session?.user?.id?.split('').reduce((a, b) => a + b.charCodeAt(0), 0) || 12345) % 1000000;
+  const generateImage = async (sceneDesc: string, focusChar: string): Promise<string> => {
+    const seed = Math.floor(Math.random() * 1000000);
     const heroDesc = heroRef.current?.desc || "anime hero";
     const costarDesc = friendRef.current?.desc || "anime sidekick";
     
-    const styleEra = encodeURIComponent(selectedStyle);
-    let sceneDesc = beat.scene;
-    
-    if (type === 'cover') {
-        sceneDesc = `Comic Book Cover with title INFINITE HEROES, ${heroDesc} in action pose`;
-    } else if (type === 'back_cover') {
-        sceneDesc = `Comic Back Cover, dramatic teaser, ${heroDesc} looking at horizon`;
-    } else {
-        sceneDesc = `${beat.focus_char === 'hero' ? heroDesc : costarDesc}, ${beat.scene}`;
-    }
-
-    // Phase 4: Extreme Simplification (Match the success of the Cover image)
+    const charAnchor = focusChar === 'hero' ? heroDesc : (focusChar === 'friend' ? costarDesc : "");
     const cleanScene = sceneDesc.replace(/[^a-zA-Z0-9 ]/g, " ").slice(0, 100);
-    const scenePrompt = encodeURIComponent(`Masterpiece anime art ${cleanScene} high quality`);
-    const imageUrl = `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=768&height=1024&nologo=true`;
+    const scenePrompt = encodeURIComponent(`${BASE_STYLE}, ${charAnchor}, ${cleanScene}`);
+    return `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=1024&height=1024&nologo=true`;
+  };
 
-    return imageUrl;
-};
+  const composePage = async (beat: Beat): Promise<string> => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1536;
+      canvas.height = 2048;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+
+      const panels = beat.panels.slice(0, 4);
+      const panelImages = await Promise.all(panels.map(async (p) => {
+          const url = await generateImage(p.scene, p.focus_char);
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = url;
+          await new Promise(r => img.onload = r);
+          return img;
+      }));
+
+      // Draw 2x2 Grid
+      const w = canvas.width / 2;
+      const h = canvas.height / 2;
+      const padding = 10;
+
+      panelImages.forEach((img, i) => {
+          const x = (i % 2) * w;
+          const y = Math.floor(i / 2) * h;
+          ctx.drawImage(img, x + padding, y + padding, w - padding * 2, h - padding * 2);
+          
+          // Draw Borders
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 8;
+          ctx.strokeRect(x + padding, y + padding, w - padding * 2, h - padding * 2);
+
+          // Draw Text Overlays
+          const panel = panels[i];
+          if (panel.caption) {
+              ctx.fillStyle = "white";
+              ctx.fillRect(x + 20, y + 20, w - 40, 60);
+              ctx.strokeStyle = "black";
+              ctx.strokeRect(x + 20, y + 20, w - 40, 60);
+              ctx.fillStyle = "black";
+              ctx.font = "bold 24px 'Comic Neue'";
+              ctx.fillText(panel.caption.slice(0, 40), x + 40, y + 55);
+          }
+      });
+
+      return canvas.toDataURL("image/jpeg", 0.9);
+  };
 
   const updateFaceState = (id: string, updates: Partial<ComicFace>) => {
       setComicFaces(prev => {
@@ -227,10 +248,10 @@ Output ONLY the JSON. No extra text.
 
   const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], providedBeat?: Beat) => {
       const isDecision = DECISION_PAGES.includes(pageNum);
-      let beat: Beat = providedBeat || { scene: "A mysterious scene", choices: [], focus_char: 'other' };
+      let beat: Beat = providedBeat || { panels: [{ scene: "A mysterious scene", focus_char: 'other' }], choices: [] };
 
       updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision, isLoading: true });
-      const url = await generateImage(beat, type);
+      const url = await composePage(beat);
       updateFaceState(faceId, { imageUrl: url, isLoading: false });
   };
 
