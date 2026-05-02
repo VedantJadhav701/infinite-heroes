@@ -219,7 +219,38 @@ Output ONLY JSON.
       return { base64: imageUrl, desc };
   };
 
-  const loadSecureImage = async (rawUrl: string): Promise<HTMLImageElement> => {
+  const loadSecureImage = async (prompt: string): Promise<HTMLImageElement> => {
+    const hfToken = import.meta.env.VITE_HF_TOKEN;
+    const hfUrl = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0";
+    
+    // 1. Primary: Hugging Face (SDXL)
+    if (hfToken) {
+        try {
+            const res = await fetch(hfUrl, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${hfToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ inputs: prompt }),
+            });
+            if (res.ok) {
+                const blob = await res.blob();
+                const localUrl = URL.createObjectURL(blob);
+                return await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => { resolve(img); URL.revokeObjectURL(localUrl); };
+                    img.onerror = reject;
+                    img.src = localUrl;
+                });
+            }
+        } catch (e) {
+            console.warn("Hugging Face failed, falling back to Proxy-Pollinations", e);
+        }
+    }
+
+    // 2. Secondary: Proxy-Pollinations Failover
+    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Math.floor(Math.random() * 1000000)}&width=768&height=768&nologo=true`;
     const proxies = [
         `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`,
         `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`
@@ -229,17 +260,12 @@ Output ONLY JSON.
         try {
             const response = await fetch(proxyUrl);
             if (!response.ok) continue;
-            
             const blob = await response.blob();
             const localUrl = URL.createObjectURL(blob);
-            
             return await new Promise((resolve, reject) => {
                 const img = new Image();
-                img.onload = () => {
-                    resolve(img);
-                    URL.revokeObjectURL(localUrl);
-                };
-                img.onerror = () => reject(new Error("Decode failed"));
+                img.onload = () => { resolve(img); URL.revokeObjectURL(localUrl); };
+                img.onerror = reject;
                 img.src = localUrl;
             });
         } catch (e) {
@@ -247,7 +273,6 @@ Output ONLY JSON.
         }
     }
 
-    console.error("All proxies failed. Returning fallback.");
     const fallback = new Image();
     fallback.src = FALLBACK_IMAGE_SVG;
     return new Promise(resolve => { fallback.onload = () => resolve(fallback); });
@@ -283,8 +308,8 @@ Output ONLY JSON.
       const panelImages = [];
 
       for (let i = 0; i < panels.length; i++) {
-          const url = await generateImage(panels[i]);
-          const img = await loadSecureImage(url);
+          const prompt = await generateImage(panels[i]);
+          const img = await loadSecureImage(prompt);
           panelImages.push(img);
           await delay(800);
       }
