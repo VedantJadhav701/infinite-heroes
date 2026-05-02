@@ -207,9 +207,9 @@ Output ONLY the JSON. No extra text.
         sceneDesc = `${beat.focus_char === 'hero' ? heroDesc : costarDesc}, ${beat.scene}`;
     }
 
-    // Aggressive Sanitization: Remove characters that break URLs or trigger blocks
-    const cleanScene = sceneDesc.replace(/[^a-zA-Z0-9 ]/g, "").slice(0, 150);
-    const scenePrompt = encodeURIComponent(`Anime manga style ${cleanScene} cinematic lighting detailed ink`);
+    // Phase 4: Extreme Simplification (Match the success of the Cover image)
+    const cleanScene = sceneDesc.replace(/[^a-zA-Z0-9 ]/g, " ").slice(0, 100);
+    const scenePrompt = encodeURIComponent(`Masterpiece anime art ${cleanScene} high quality`);
     const imageUrl = `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=768&height=1024&nologo=true`;
 
     return imageUrl;
@@ -430,6 +430,45 @@ Output ONLY the JSON. No extra text.
       if (index < currentSheetIndex) setCurrentSheetIndex(index);
       else if (index === currentSheetIndex && comicFaces.find(f => f.pageIndex === index)?.imageUrl) setCurrentSheetIndex(prev => prev + 1);
   };
+
+  // --- Authentication Gate ---
+  if (!session) {
+    return (
+      <div className="fixed inset-0 z-[500] flex items-center justify-center bg-slate-900 overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 opacity-20 pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px] animate-pulse"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-red-500 rounded-full blur-[120px] animate-pulse delay-700"></div>
+        </div>
+
+        <div className="relative max-w-md w-full bg-white border-[6px] border-black shadow-[16px_16px_0px_rgba(0,0,0,1)] p-10 text-center rotate-1">
+          <div className="absolute -top-12 -left-12 w-24 h-24 bg-yellow-400 rounded-full flex items-center justify-center border-4 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] animate-bounce">
+             <span className="text-5xl">⚡</span>
+          </div>
+
+          <h1 className="font-comic text-6xl text-red-600 mb-2 uppercase tracking-tighter" style={{textShadow: '3px 3px 0px black'}}>
+            Infinite Heroes
+          </h1>
+          <p className="font-comic text-2xl text-black mb-8 leading-tight">
+            The Multiverse is <span className="text-blue-600">Locked!</span> <br/>
+            Sign in to start your adventure.
+          </p>
+
+          <button 
+            onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}
+            className="comic-btn bg-white text-black text-2xl px-8 py-4 w-full flex items-center justify-center gap-4 hover:bg-gray-100 transition-all active:scale-95 border-4 border-black shadow-[8px_8px_0px_rgba(0,0,0,1)]"
+          >
+            <img src="https://www.google.com/favicon.ico" className="w-8 h-8" alt="Google" />
+            <span className="font-bold">SIGN IN WITH GOOGLE</span>
+          </button>
+
+          <p className="mt-8 text-xs text-gray-400 font-mono uppercase tracking-widest">
+            Identity verification required by the council of heroes
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="comic-scene">
