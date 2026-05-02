@@ -16,7 +16,7 @@ import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
 // --- Constants ---
-const STORY_MODEL = "gemini-1.5-flash";
+const STORY_MODEL = "models/gemini-pro";
 
 const App: React.FC = () => {
   // --- Auth State ---
@@ -70,6 +70,7 @@ const App: React.FC = () => {
   // Helper to always get a fresh instance with the selected key
   const getAI = () => {
     const key = import.meta.env.VITE_GEMINI_API_KEY || (window as any).aistudio?.getSelectedApiKey?.();
+    // Force v1 for stability across all regions
     return new GoogleGenerativeAI(key);
   };
 
@@ -254,7 +255,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       const seed = Math.floor(Math.random() * 1000000);
       const style = selectedGenre === 'Custom' ? "Modern American comic book art" : `${selectedGenre} comic`;
       const prompt = encodeURIComponent(`Masterpiece anime character sheet, ${style}, detailed, full body, ${desc}`);
-      const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=512&height=512&model=flux&nologo=true`;
+      const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=512&height=512&nologo=true`;
       
       try {
           const response = await fetch(imageUrl);
@@ -296,7 +297,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
     const scenePrompt = encodeURIComponent(sceneDesc);
 
     const prompt = `Comic book art, ${styleEra} style, ${scenePrompt}, detailed ink, vibrant colors`;
-    const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=1024&height=1536&model=flux&nologo=true`;
+    const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=1024&height=1536&nologo=true`;
 
     try {
         const response = await fetch(imageUrl);
