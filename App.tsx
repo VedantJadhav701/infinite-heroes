@@ -37,7 +37,12 @@ let inFlightCount = 0;
 const MAX_CONCURRENT = 2;
 
 function sanitizePrompt(raw: string) {
-  return raw.replace(/\s+/g, " ").replace(/[^a-zA-Z0-9 ,.-]/g, " ").trim().slice(0, 200);
+  return raw
+    .replace(/\s+/g, " ")
+    .replace(/, ,+/g, ", ") // Remove double commas
+    .replace(/[^a-zA-Z0-9 ,.-]/g, " ")
+    .trim()
+    .slice(0, 200);
 }
 
 async function withTimeout<T>(p: Promise<T>, ms = 12000): Promise<T> {
@@ -213,50 +218,24 @@ Output ONLY JSON.
       return { base64: imageUrl, desc };
   };
 
-  const pollinationsGenerate = async (prompt: string): Promise<string> => {
-    if (Date.now() < breaker.pollinationsBlockedUntil) throw new Error("pollinations blocked");
-    const seed = Math.floor(Math.random() * 1000000);
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${seed}&width=768&height=768&nologo=true`;
-    
-    const res = await fetch(url, { referrerPolicy: "no-referrer" });
-    if (!res.ok) {
-        if (res.status === 403) breaker.pollinationsBlockedUntil = Date.now() + 60000;
-        throw new Error(`pollinations ${res.status}`);
-    }
-    return url;
-  };
-
   const generateImage = async (panel: Panel): Promise<string> => {
     const heroDesc = heroRef.current?.desc || "anime hero warrior";
     const costarDesc = friendRef.current?.desc || "anime sidekick ally";
     const charAnchor = panel.focus_char === 'hero' ? heroDesc : (panel.focus_char === 'friend' ? costarDesc : "");
     
-    const rawPrompt = `${BASE_STYLE}, ${panel.camera || "medium"} shot, ${panel.mood || "intense"} mood, ${charAnchor}, ${panel.scene}`;
+    // Cleanup: Ensure no empty segments or double commas
+    const segments = [BASE_STYLE, panel.camera || "medium shot", panel.mood || "intense mood", charAnchor, panel.scene];
+    const rawPrompt = segments.filter(s => s && s.trim()).join(", ");
     const prompt = sanitizePrompt(rawPrompt);
     const key = prompt.toLowerCase();
 
     if (imageCache.has(key)) return imageCache.get(key)!;
 
-    // Concurrency Lock
-    while (inFlightCount >= MAX_CONCURRENT) await delay(300);
-    inFlightCount++;
-
-    try {
-        // Primary: Pollinations with Retry
-        for (let i = 0; i < 2; i++) {
-            try {
-                const url = await withTimeout(pollinationsGenerate(prompt), 10000);
-                imageCache.set(key, url);
-                return url;
-            } catch (e) {
-                await delay(1000 * (i + 1));
-            }
-        }
-    } finally {
-        inFlightCount--;
-    }
-
-    return "https://via.placeholder.com/768x768?text=Sync+Error";
+    const seed = Math.floor(Math.random() * 1000000);
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${seed}&width=768&height=768&nologo=true`;
+    
+    imageCache.set(key, url);
+    return url;
   };
 
   const composePage = async (beat: Beat): Promise<string> => {
@@ -267,17 +246,28 @@ Output ONLY JSON.
       if (!ctx) return '';
 
       const panels = beat.panels.slice(0, 4);
-      
-      // Sequential/Throttled Generation
       const panelImages = [];
-      for (const p of panels) {
-          const url = await generateImage(p);
+
+      for (let i = 0; i < panels.length; i++) {
+          const url = await generateImage(panels[i]);
           const img = new Image();
           img.crossOrigin = "anonymous";
-          img.src = url;
-          await new Promise(r => img.onload = r);
-          panelImages.push(img);
-          await delay(500); // Breathe between panels
+          
+          try {
+              await new Promise((resolve, reject) => {
+                  img.onload = resolve;
+                  img.onerror = reject;
+                  img.src = url;
+              });
+              panelImages.push(img);
+          } catch (e) {
+              console.warn("Panel failed, using color block", e);
+              const placeholder = new Image();
+              placeholder.src = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==`; // 1x1 grey
+              await new Promise(r => placeholder.onload = r);
+              panelImages.push(placeholder);
+          }
+          await delay(800); // Respect rate limits
       }
 
       const w = canvas.width;
