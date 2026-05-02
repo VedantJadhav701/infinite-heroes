@@ -220,62 +220,34 @@ Output ONLY JSON.
   };
 
   const loadSecureImage = async (prompt: string): Promise<HTMLImageElement> => {
-    const hfToken = import.meta.env.VITE_HF_TOKEN;
-    const hfUrl = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0";
-    
-    // 1. Primary: Hugging Face (SDXL)
-    if (hfToken) {
-        try {
-            const res = await fetch(hfUrl, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${hfToken}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ inputs: prompt }),
-            });
-            if (res.ok) {
-                const blob = await res.blob();
-                const localUrl = URL.createObjectURL(blob);
-                return await new Promise((resolve, reject) => {
-                    const img = new Image();
-                    img.onload = () => { resolve(img); URL.revokeObjectURL(localUrl); };
-                    img.onerror = reject;
-                    img.src = localUrl;
-                });
-            }
-        } catch (e) {
-            console.warn("Hugging Face failed, falling back to Proxy-Pollinations", e);
+    try {
+        // Call YOUR serverless function, not Pollinations directly.
+        const apiUrl = `/api/generate-image?prompt=${encodeURIComponent(prompt)}`;
+        const response = await fetch(apiUrl);
+
+        if (!response.ok) {
+            throw new Error(`Backend failed to fetch image: ${response.status}`);
         }
+
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous"; 
+            img.onload = () => {
+                resolve(img);
+                URL.revokeObjectURL(localUrl);
+            };
+            img.onerror = () => reject(new Error("Image decode failed"));
+            img.src = localUrl;
+        });
+    } catch (error) {
+        console.error("Serverless Pipeline Failed:", error);
+        const fallback = new Image();
+        fallback.src = FALLBACK_IMAGE_SVG;
+        return new Promise(resolve => fallback.onload = () => resolve(fallback));
     }
-
-    // 2. Secondary: Proxy-Pollinations Failover
-    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Math.floor(Math.random() * 1000000)}&width=768&height=768&nologo=true`;
-    const proxies = [
-        `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`
-    ];
-
-    for (const proxyUrl of proxies) {
-        try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) continue;
-            const blob = await response.blob();
-            const localUrl = URL.createObjectURL(blob);
-            return await new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => { resolve(img); URL.revokeObjectURL(localUrl); };
-                img.onerror = reject;
-                img.src = localUrl;
-            });
-        } catch (e) {
-            console.warn(`Proxy failed: ${proxyUrl}`, e);
-        }
-    }
-
-    const fallback = new Image();
-    fallback.src = FALLBACK_IMAGE_SVG;
-    return new Promise(resolve => { fallback.onload = () => resolve(fallback); });
   };
 
   const generateImage = async (panel: Panel): Promise<string> => {
