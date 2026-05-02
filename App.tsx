@@ -359,6 +359,11 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
                await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story');
                generatingPages.current.delete(pageNum);
           }
+          
+          // Auto-save if the back cover was just generated
+          if (pagesToGen.includes(BACK_COVER_PAGE)) {
+              saveComicToDatabase(historyRef.current);
+          }
       } catch (e) {
           console.error("Batch generation error", e);
       } finally {
@@ -401,6 +406,33 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         await generateBatch(1, INITIAL_PAGES);
         generateBatch(3, 3);
     }, 1100);
+  };
+
+  const saveComicToDatabase = async (finalFaces: ComicFace[]) => {
+      if (!session?.user?.id) return;
+
+      const title = `The Adventures of ${heroRef.current?.desc || 'Hero'}`;
+      
+      const { error } = await supabase.from('comics').insert([{
+          user_id: session.user.id,
+          title: title,
+          genre: selectedGenre,
+          language: selectedLanguage,
+          pages: finalFaces.map(f => ({
+              id: f.id,
+              type: f.type,
+              imageUrl: f.imageUrl,
+              caption: f.narrative?.caption,
+              dialogue: f.narrative?.dialogue,
+              choice: f.resolvedChoice
+          }))
+      }]);
+
+      if (error) {
+          console.error("Error saving comic:", error.message);
+      } else {
+          console.log("Comic saved successfully to library!");
+      }
   };
 
   const handleChoice = async (pageIndex: number, choice: string) => {
