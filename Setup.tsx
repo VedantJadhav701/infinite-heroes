@@ -5,7 +5,7 @@
 */
 
 import React, { useState, useEffect } from 'react';
-import { GENRES, LANGUAGES, Persona } from './types';
+import { GENRES, LANGUAGES, Persona, DEFAULT_HEROES, DEFAULT_COSTARS, ART_STYLES } from './types';
 import { signInWithGoogle, signOut } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
@@ -26,6 +26,7 @@ interface SetupProps {
     onRichModeChange: (val: boolean) => void;
     onLaunch: () => void;
     session: Session | null;
+    progress: { current: number, total: number };
 }
 
 const Footer = () => {
@@ -78,11 +79,25 @@ export const Setup: React.FC<SetupProps> = (props) => {
              }
           `}</style>
         {props.isTransitioning && (
-            <div className="fixed top-1/2 left-1/2 z-[210] pointer-events-none" style={{ animation: 'pow-enter 1s forwards ease-out' }}>
-                <svg viewBox="0 0 200 150" className="w-[500px] h-[400px] drop-shadow-[0_10px_0_rgba(0,0,0,0.5)]">
-                    <path d="M95.7,12.8 L110.2,48.5 L148.5,45.2 L125.6,74.3 L156.8,96.8 L119.4,105.5 L122.7,143.8 L92.5,118.6 L60.3,139.7 L72.1,103.2 L34.5,108.8 L59.9,79.9 L24.7,57.3 L62.5,54.4 L61.2,16.5 z" fill="#FFD700" stroke="black" strokeWidth="4"/>
-                    <text x="100" y="95" textAnchor="middle" fontFamily="'Bangers', cursive" fontSize="70" fill="#DC2626" stroke="black" strokeWidth="2" transform="rotate(-5 100 75)">POW!</text>
-                </svg>
+            <div className="fixed inset-0 z-[210] flex flex-col items-center justify-center bg-black/60 backdrop-blur-md pointer-events-none">
+                <div style={{ animation: 'pow-enter 1s forwards ease-out' }}>
+                    <svg viewBox="0 0 200 150" className="w-[300px] h-[240px] drop-shadow-[0_10px_0_rgba(0,0,0,0.5)]">
+                        <path d="M95.7,12.8 L110.2,48.5 L148.5,45.2 L125.6,74.3 L156.8,96.8 L119.4,105.5 L122.7,143.8 L92.5,118.6 L60.3,139.7 L72.1,103.2 L34.5,108.8 L59.9,79.9 L24.7,57.3 L62.5,54.4 L61.2,16.5 z" fill="#FFD700" stroke="black" strokeWidth="4"/>
+                        <text x="100" y="95" textAnchor="middle" fontFamily="'Bangers', cursive" fontSize="70" fill="#DC2626" stroke="black" strokeWidth="2" transform="rotate(-5 100 75)">POW!</text>
+                    </svg>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="w-[400px] mt-8 bg-white border-[4px] border-black p-1 rotate-1 shadow-[8px_8px_0px_rgba(0,0,0,0.4)]">
+                    <div className="flex justify-between items-end mb-1 px-2">
+                        <span className="font-comic text-2xl text-white drop-shadow-[2px_2px_0px_black]">RENDERING...</span>
+                        <span className="font-comic text-xl text-yellow-400 drop-shadow-[2px_2px_0px_black]">{Math.floor((props.progress.current / props.progress.total) * 100)}%</span>
+                    </div>
+                    <div className="h-8 bg-gray-200 border-2 border-black overflow-hidden">
+                        <div className="h-full bg-red-600 transition-all duration-500 ease-out border-r-2 border-black" style={{ width: `${(props.progress.current / props.progress.total) * 100}%` }}></div>
+                    </div>
+                    <p className="font-comic text-center mt-2 text-white text-lg">Page {props.progress.current} of {props.progress.total}</p>
+                </div>
             </div>
         )}
         
@@ -131,6 +146,13 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 {props.hero && <span className="text-green-600 font-bold font-comic text-sm animate-pulse">✓ READY</span>}
                             </div>
                             
+                            <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                                {DEFAULT_HEROES.map((h, i) => (
+                                    <img key={i} src={h.path} onClick={() => props.onHeroUpload(h.path)}
+                                         title={h.name} className="w-12 h-12 object-cover border-2 border-black cursor-pointer hover:scale-110 transition-transform bg-white" />
+                                ))}
+                            </div>
+                            
                             {props.hero ? (
                                 <div className="flex gap-3 items-center mt-1">
                                      <img src={`data:image/jpeg;base64,${props.hero.base64}`} alt="Hero Preview" className="w-20 h-20 object-cover border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,0.2)] bg-white rotate-[-2deg]" />
@@ -152,6 +174,13 @@ export const Setup: React.FC<SetupProps> = (props) => {
                             <div className="flex justify-between items-center mb-1">
                                 <p className="font-comic text-lg uppercase font-bold text-purple-900">CO-STAR (OPTIONAL)</p>
                                 {props.friend && <span className="text-green-600 font-bold font-comic text-sm animate-pulse">✓ READY</span>}
+                            </div>
+
+                            <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                                {DEFAULT_COSTARS.map((h, i) => (
+                                    <img key={i} src={h.path} onClick={() => props.onFriendUpload(h.path)}
+                                         title={h.name} className="w-12 h-12 object-cover border-2 border-black cursor-pointer hover:scale-110 transition-transform bg-white" />
+                                ))}
                             </div>
 
                             {props.friend ? (
@@ -186,6 +215,13 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                     <p className="font-comic text-base mb-1 font-bold text-gray-800">GENRE</p>
                                     <select value={props.selectedGenre} onChange={(e) => props.onGenreChange(e.target.value)} className="w-full font-comic text-lg p-1 border-2 border-black uppercase bg-white text-black cursor-pointer shadow-[3px_3px_0px_rgba(0,0,0,0.2)] focus:outline-none focus:translate-x-[1px] focus:translate-y-[1px] focus:shadow-none transition-all">
                                         {GENRES.map(g => <option key={g} value={g} className="text-black">{g}</option>)}
+                                    </select>
+                                </div>
+
+                                <div className="mb-2">
+                                    <p className="font-comic text-base mb-1 font-bold text-gray-800">ART STYLE</p>
+                                    <select className="w-full font-comic text-lg p-1 border-2 border-black uppercase bg-white text-black cursor-pointer shadow-[3px_3px_0px_rgba(0,0,0,0.2)]">
+                                        {ART_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
 

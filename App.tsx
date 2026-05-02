@@ -63,6 +63,7 @@ const App: React.FC = () => {
   // --- Transition States ---
   const [showSetup, setShowSetup] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [genProgress, setGenProgress] = useState({ current: 0, total: TOTAL_PAGES });
 
   const generatingPages = useRef(new Set<number>());
   const historyRef = useRef<ComicFace[]>([]);
@@ -356,9 +357,12 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 
       try {
           // Optimization: Generate all pages in the batch in PARALLEL
+          let completed = 0;
           await Promise.all(pagesToGen.map(async (pageNum) => {
                await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story');
                generatingPages.current.delete(pageNum);
+               completed++;
+               setGenProgress(prev => ({ ...prev, current: prev.current + 1 }));
           }));
           
           // Auto-save if the back cover was just generated
@@ -468,11 +472,31 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
     doc.save('Infinite-Heroes-Issue.pdf');
   };
 
-  const handleHeroUpload = async (file: File) => {
-       try { const base64 = await fileToBase64(file); setHero({ base64, desc: "The Main Hero" }); } catch (e) { alert("Hero upload failed"); }
+  const handleHeroUpload = async (input: File | string) => {
+       try { 
+           if (typeof input === 'string') {
+               const res = await fetch(input);
+               const blob = await res.blob();
+               const base64 = await fileToBase64(new File([blob], 'hero.png', { type: 'image/png' }));
+               setHero({ base64, desc: "The Main Hero" });
+           } else {
+               const base64 = await fileToBase64(input); 
+               setHero({ base64, desc: "The Main Hero" }); 
+           }
+       } catch (e) { alert("Hero selection failed"); }
   };
-  const handleFriendUpload = async (file: File) => {
-       try { const base64 = await fileToBase64(file); setFriend({ base64, desc: "The Sidekick/Rival" }); } catch (e) { alert("Friend upload failed"); }
+  const handleFriendUpload = async (input: File | string) => {
+       try { 
+           if (typeof input === 'string') {
+               const res = await fetch(input);
+               const blob = await res.blob();
+               const base64 = await fileToBase64(new File([blob], 'friend.png', { type: 'image/png' }));
+               setFriend({ base64, desc: "The Sidekick/Rival" });
+           } else {
+               const base64 = await fileToBase64(input); 
+               setFriend({ base64, desc: "The Sidekick/Rival" }); 
+           }
+       } catch (e) { alert("Friend selection failed"); }
   };
 
   const handleSheetClick = (index: number) => {
@@ -503,6 +527,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           onRichModeChange={setRichMode}
           onLaunch={launchStory}
           session={session}
+          progress={genProgress}
       />
       
       <Book 

@@ -39,6 +39,32 @@ export const LANGUAGES = [
     { code: 'zh-CN', name: 'Chinese (China)' }
 ];
 
+export const ART_STYLES = [
+    "Classic Manga",
+    "Modern American",
+    "Cyberpunk Neon",
+    "Watercolor Fantasy",
+    "Film Noir (B&W)",
+    "Oil Painting",
+    "Sketchbook"
+];
+
+export const DEFAULT_HEROES = [
+    { name: "Samurai", path: "/defaults/default_hero_1_samurai_1777749755618.png", desc: "A cool samurai warrior with a blue glowing sword." },
+    { name: "Cyber", path: "/defaults/default_hero_2_cyber_girl_1777749776348.png", desc: "A futuristic cybernetic girl with neon accents." },
+    { name: "Knight", path: "/defaults/default_hero_3_knight_1777749793631.png", desc: "A heroic knight in golden armor." },
+    { name: "Mage", path: "/defaults/default_hero_4_mage_1777749809386.png", desc: "A mysterious mage with purple magical energy." },
+    { name: "Pilot", path: "/defaults/default_hero_5_pilot_1777749825185.png", desc: "A charismatic mecha pilot in a flight suit." }
+];
+
+export const DEFAULT_COSTARS = [
+    { name: "Thief", path: "/defaults/default_costar_1_thief_1777749845830.png", desc: "An agile ninja thief with daggers." },
+    { name: "Robot", path: "/defaults/default_costar_2_robot_1777749864095.png", desc: "A friendly helper robot with digital eyes." },
+    { name: "Elf", path: "/defaults/default_costar_3_elf_1777749879278.png", desc: "An elegant elf archer with a wooden bow." },
+    { name: "Rival", path: "/defaults/default_costar_4_rival_1777749893862.png", desc: "An edgy rival character in a leather jacket." },
+    { name: "Spirit", path: "/defaults/default_costar_5_spirit_1777749910157.png", desc: "An ethereal fox spirit with glowing trails." }
+];
+
 export interface ComicFace {
   id: string;
   type: 'cover' | 'story' | 'back_cover';
