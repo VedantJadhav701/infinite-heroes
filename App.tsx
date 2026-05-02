@@ -16,10 +16,8 @@ import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
 // --- Constants ---
-const MODEL_TEXT = "gemini-1.5-flash-latest"; // Using 'latest' alias for stability
-const MODEL_IMAGE = "gemini-1.5-flash-latest"; 
-const MODEL_IMAGE_GEN_NAME = MODEL_IMAGE;
-const MODEL_TEXT_NAME = MODEL_TEXT;
+const PRIMARY_MODEL = "gemini-1.5-flash";
+const FALLBACK_MODELS = ["gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-pro"];
 
 const App: React.FC = () => {
   // --- Auth State ---
@@ -95,6 +93,23 @@ const App: React.FC = () => {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  };
+
+  const runWithFallback = async (method: (model: any) => Promise<any>) => {
+      const ai = getAI();
+      const models = [PRIMARY_MODEL, ...FALLBACK_MODELS];
+      let lastErr: any = null;
+      
+      for (const mName of models) {
+          try {
+              const model = ai.getGenerativeModel({ model: mName });
+              return await method(model);
+          } catch (e) {
+              lastErr = e;
+              console.warn(`Model ${mName} failed, trying next...`, e);
+          }
+      }
+      throw lastErr;
   };
 
   /**
@@ -209,8 +224,9 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 }
 `;
     try {
-        const ai = getAI();
-        const res = await ai.models.generateContent({ model: MODEL_TEXT_NAME, contents: prompt, config: { responseMimeType: 'application/json' } });
+        const res = await runWithFallback((model) => 
+            model.generateContent({ contents: prompt, config: { responseMimeType: 'application/json' } })
+        );
         let rawText = res.text || "{}";
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         
@@ -243,12 +259,12 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
   const generatePersona = async (desc: string): Promise<Persona> => {
       const style = selectedGenre === 'Custom' ? "Modern American comic book art" : `${selectedGenre} comic`;
       try {
-          const ai = getAI();
-          const res = await ai.models.generateContent({
-              model: MODEL_IMAGE_GEN_NAME,
-              contents: { text: `STYLE: Masterpiece ${style} character sheet, detailed ink, neutral background. FULL BODY. Character: ${desc}` },
-              config: { imageConfig: { aspectRatio: '1:1' } }
-          });
+          const res = await runWithFallback((model) => 
+              model.generateContent({
+                  contents: { text: `STYLE: Masterpiece ${style} character sheet, detailed ink, neutral background. FULL BODY. Character: ${desc}` },
+                  config: { imageConfig: { aspectRatio: '1:1' } }
+              })
+          );
           const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
           if (part?.inlineData?.data) return { base64: part.inlineData.data, desc };
           throw new Error("Failed");
@@ -288,12 +304,12 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
     contents.push({ text: promptText });
 
     try {
-        const ai = getAI();
-        const res = await ai.models.generateContent({
-          model: MODEL_IMAGE_GEN_NAME,
-          contents: contents,
-          config: { imageConfig: { aspectRatio: '2:3' } }
-        });
+        const res = await runWithFallback((model) => 
+            model.generateContent({
+                contents: contents,
+                config: { imageConfig: { aspectRatio: '2:3' } }
+            })
+        );
         const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
     } catch (e) { 
