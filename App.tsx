@@ -29,6 +29,24 @@ const STORY_FALLBACK: Beat[] = [
 
 const BASE_STYLE = "Masterpiece anime manga style, high contrast ink, detailed cinematic lighting, speed lines, dramatic shadows";
 
+// --- Ironclad Pipeline Utilities ---
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+const imageCache = new Map<string, string>();
+const breaker = { pollinationsBlockedUntil: 0 };
+let inFlightCount = 0;
+const MAX_CONCURRENT = 2;
+
+function sanitizePrompt(raw: string) {
+  return raw.replace(/\s+/g, " ").replace(/[^a-zA-Z0-9 ,.-]/g, " ").trim().slice(0, 200);
+}
+
+async function withTimeout<T>(p: Promise<T>, ms = 12000): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))
+  ]);
+}
+
 const App: React.FC = () => {
   // --- Generation State ---
   const [isGenerating, setIsGenerating] = useState(false);
@@ -195,34 +213,50 @@ Output ONLY JSON.
       return { base64: imageUrl, desc };
   };
 
-  const generateImage = async (panel: Panel, retries = 2): Promise<string> => {
+  const pollinationsGenerate = async (prompt: string): Promise<string> => {
+    if (Date.now() < breaker.pollinationsBlockedUntil) throw new Error("pollinations blocked");
     const seed = Math.floor(Math.random() * 1000000);
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${seed}&width=768&height=768&nologo=true`;
+    
+    const res = await fetch(url, { referrerPolicy: "no-referrer" });
+    if (!res.ok) {
+        if (res.status === 403) breaker.pollinationsBlockedUntil = Date.now() + 60000;
+        throw new Error(`pollinations ${res.status}`);
+    }
+    return url;
+  };
+
+  const generateImage = async (panel: Panel): Promise<string> => {
     const heroDesc = heroRef.current?.desc || "anime hero warrior";
     const costarDesc = friendRef.current?.desc || "anime sidekick ally";
-    
     const charAnchor = panel.focus_char === 'hero' ? heroDesc : (panel.focus_char === 'friend' ? costarDesc : "");
-    const cleanScene = panel.scene.replace(/[^a-zA-Z0-9 ]/g, " ").slice(0, 100);
-    const scenePrompt = encodeURIComponent(`
-        ${BASE_STYLE}, 
-        ${panel.camera || "medium"} shot, 
-        ${panel.mood || "intense"} mood, 
-        ${charAnchor}, 
-        ${cleanScene}
-    `);
     
-    const url = `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=1024&height=1024&nologo=true`;
-    
+    const rawPrompt = `${BASE_STYLE}, ${panel.camera || "medium"} shot, ${panel.mood || "intense"} mood, ${charAnchor}, ${panel.scene}`;
+    const prompt = sanitizePrompt(rawPrompt);
+    const key = prompt.toLowerCase();
+
+    if (imageCache.has(key)) return imageCache.get(key)!;
+
+    // Concurrency Lock
+    while (inFlightCount >= MAX_CONCURRENT) await delay(300);
+    inFlightCount++;
+
     try {
-        const res = await fetch(url, { referrerPolicy: "no-referrer" });
-        if (!res.ok) throw new Error();
-        return url;
-    } catch {
-        if (retries > 0) {
-            await new Promise(r => setTimeout(r, 1000));
-            return generateImage(panel, retries - 1);
+        // Primary: Pollinations with Retry
+        for (let i = 0; i < 2; i++) {
+            try {
+                const url = await withTimeout(pollinationsGenerate(prompt), 10000);
+                imageCache.set(key, url);
+                return url;
+            } catch (e) {
+                await delay(1000 * (i + 1));
+            }
         }
-        return "https://via.placeholder.com/1024x1024?text=Panel+Sync+Error";
+    } finally {
+        inFlightCount--;
     }
+
+    return "https://via.placeholder.com/768x768?text=Sync+Error";
   };
 
   const composePage = async (beat: Beat): Promise<string> => {
@@ -233,14 +267,18 @@ Output ONLY JSON.
       if (!ctx) return '';
 
       const panels = beat.panels.slice(0, 4);
-      const panelImages = await Promise.all(panels.map(async (p) => {
+      
+      // Sequential/Throttled Generation
+      const panelImages = [];
+      for (const p of panels) {
           const url = await generateImage(p);
           const img = new Image();
           img.crossOrigin = "anonymous";
           img.src = url;
           await new Promise(r => img.onload = r);
-          return img;
-      }));
+          panelImages.push(img);
+          await delay(500); // Breathe between panels
+      }
 
       const w = canvas.width;
       const h = canvas.height;
