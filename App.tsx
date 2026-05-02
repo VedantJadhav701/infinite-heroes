@@ -216,29 +216,20 @@ Output ONLY the JSON. No extra text.
 };
 
   const updateFaceState = (id: string, updates: Partial<ComicFace>) => {
-      setComicFaces(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
-      const idx = historyRef.current.findIndex(f => f.id === id);
-      if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
+      setComicFaces(prev => {
+          const newFaces = prev.map(f => f.id === id ? { ...f, ...updates } : f);
+          // Sync with historyRef immediately for persistence
+          const idx = historyRef.current.findIndex(f => f.id === id);
+          if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
+          return newFaces;
+      });
   };
 
-  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type']) => {
+  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], providedBeat?: Beat) => {
       const isDecision = DECISION_PAGES.includes(pageNum);
-      let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
+      let beat: Beat = providedBeat || { scene: "A mysterious scene", choices: [], focus_char: 'other' };
 
-      if (type === 'cover') {
-           // Cover beat is handled in generateImage
-      } else if (type === 'back_cover') {
-           beat = { scene: "Thematic teaser image", choices: [], focus_char: 'other' };
-      }
-
-      if (beat.focus_char === 'friend' && !friendRef.current && type === 'story') {
-          try {
-              const newSidekick = await generatePersona(selectedGenre === 'Custom' ? "A fitting sidekick for this story" : `Sidekick for ${selectedGenre} story.`);
-              setFriend(newSidekick);
-          } catch (e) { beat.focus_char = 'other'; }
-      }
-
-      updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
+      updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision, isLoading: true });
       const url = await generateImage(beat, type);
       updateFaceState(faceId, { imageUrl: url, isLoading: false });
   };
@@ -277,12 +268,17 @@ Output ONLY the JSON. No extra text.
                   return [...prev, { id: `page-${pageNum}`, type, choices: [], isLoading: true, pageIndex: pageNum }];
               });
 
-              // Apply pre-generated beat or fallback
-              if (preGeneratedBeats && preGeneratedBeats[i]) {
-                  updateFaceState(`page-${pageNum}`, { narrative: preGeneratedBeats[i] });
+              // Apply pre-generated beat or fallback (Fix: Mapping beat index correctly)
+              if (preGeneratedBeats) {
+                  const beatIdx = pageNum - 1; // Page 1 gets beat 0, Page 2 gets beat 1...
+                  const beat = preGeneratedBeats[beatIdx] || STORY_FALLBACK[beatIdx % STORY_FALLBACK.length];
+                  updateFaceState(`page-${pageNum}`, { narrative: beat });
+                  
+                  // Generate the image using this beat
+                  await generateSinglePage(`page-${pageNum}`, pageNum, type, beat);
+              } else {
+                  await generateSinglePage(`page-${pageNum}`, pageNum, type);
               }
-
-              await generateSinglePage(`page-${pageNum}`, pageNum, type);
               await new Promise(r => setTimeout(r, 2000));
               
               setGenProgress(prev => ({ ...prev, current: prev.current + 1 }));
