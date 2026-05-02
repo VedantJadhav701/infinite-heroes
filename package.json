@@ -10,11 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.0",
     "@google/genai": "^1.27.0",
+    "@supabase/supabase-js": "^2.105.1",
+    "jspdf": "^3.0.3",
+    "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "recharts": "^3.3.0",
-    "jspdf": "^3.0.3"
+    "recharts": "^3.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

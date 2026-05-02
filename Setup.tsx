@@ -6,6 +6,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { GENRES, LANGUAGES, Persona } from './types';
+import { signInWithGoogle, signOut } from './supabaseClient';
+import { Session } from '@supabase/supabase-js';
 
 interface SetupProps {
     show: boolean;
@@ -23,6 +25,7 @@ interface SetupProps {
     onPremiseChange: (val: string) => void;
     onRichModeChange: (val: boolean) => void;
     onLaunch: () => void;
+    session: Session | null;
 }
 
 const Footer = () => {
@@ -97,6 +100,24 @@ export const Setup: React.FC<SetupProps> = (props) => {
                 
                 <h1 className="font-comic text-5xl text-red-600 leading-none mb-1 tracking-wide inline-block mr-3" style={{textShadow: '2px 2px 0px black'}}>INFINITE</h1>
                 <h1 className="font-comic text-5xl text-yellow-400 leading-none mb-4 tracking-wide inline-block" style={{textShadow: '2px 2px 0px black'}}>HEROES</h1>
+                
+                {/* Auth Section */}
+                <div className="absolute top-4 right-4 flex items-center gap-2">
+                    {props.session ? (
+                        <div className="flex items-center gap-2 bg-gray-100 p-2 border-2 border-black rotate-1 shadow-[4px_4px_0px_rgba(0,0,0,0.2)]">
+                            <img src={props.session.user.user_metadata.avatar_url} alt="User" className="w-8 h-8 rounded-full border-2 border-black" />
+                            <span className="font-comic text-sm hidden md:block">{props.session.user.user_metadata.full_name}</span>
+                            <button onClick={signOut} className="text-xs text-red-600 font-bold hover:underline">LOGOUT</button>
+                        </div>
+                    ) : (
+                        <button onClick={signInWithGoogle} className="comic-btn bg-white text-black px-4 py-2 flex items-center gap-2 text-sm hover:bg-gray-100">
+                            <svg className="w-4 h-4" viewBox="0 0 24 24">
+                                <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 1.56-1.56 2.73-3.21 2.73c-2.13 0-3.86-1.73-3.86-3.86s1.73-3.86 3.86-3.86c.95 0 1.81.35 2.47.92l2.03-2.03C18.79 6.55 16.62 5.5 14.18 5.5c-4.42 0-8 3.58-8 8s3.58 8 8 8c4.25 0 7.82-3.14 8-7.3c0-.36-.03-.7-.08-1.1h-.75z"/>
+                            </svg>
+                            SIGN IN WITH GOOGLE
+                        </button>
+                    )}
+                </div>
                 
                 <div className="flex flex-col md:flex-row gap-4 mb-4 text-left">
                     

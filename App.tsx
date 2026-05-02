@@ -12,6 +12,8 @@ import { Setup } from './Setup';
 import { Book } from './Book';
 import { useApiKey } from './useApiKey';
 import { ApiKeyDialog } from './ApiKeyDialog';
+import { supabase } from './supabaseClient';
+import { Session } from '@supabase/supabase-js';
 
 // --- Constants ---
 const MODEL_V3 = "gemini-3-pro-image-preview";
@@ -19,6 +21,23 @@ const MODEL_IMAGE_GEN_NAME = MODEL_V3;
 const MODEL_TEXT_NAME = MODEL_V3;
 
 const App: React.FC = () => {
+  // --- Auth State ---
+  const [session, setSession] = useState<Session | null>(null);
+
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   // --- API Key Hook ---
   const { validateApiKey, setShowApiKeyDialog, showApiKeyDialog, handleApiKeyDialogContinue } = useApiKey();
 
@@ -448,6 +467,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           onPremiseChange={setCustomPremise}
           onRichModeChange={setRichMode}
           onLaunch={launchStory}
+          session={session}
       />
       
       <Book 
