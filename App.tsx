@@ -229,6 +229,14 @@ Output ONLY JSON.
             throw new Error(`Backend failed to fetch image: ${response.status}`);
         }
 
+        // NEW: Ensure the backend actually sent an image, not an HTML page!
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.startsWith("image/")) {
+            const textResponse = await response.text();
+            console.error("Received non-image data:", textResponse.substring(0, 100));
+            throw new Error("Backend did not return an image.");
+        }
+
         const blob = await response.blob();
         const localUrl = URL.createObjectURL(blob);
         
