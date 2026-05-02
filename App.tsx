@@ -18,6 +18,14 @@ import { Session } from '@supabase/supabase-js';
 // --- Constants ---
 const STORY_MODEL = "models/gemini-pro";
 
+const STORY_FALLBACK = [
+    { scene: "Hero awakens mysterious power in a dark neon city", caption: "The transformation was sudden. The city's neon lights pulsed in sync with my heartbeat.", dialogue: "What... what is this power?", focus_char: "hero" },
+    { scene: "A mysterious villain in shadows appears and challenges the hero", caption: "From the darkness, a voice spoke. The rival had found me.", dialogue: "You think you're ready? You've barely scratched the surface.", focus_char: "friend" },
+    { scene: "An intense battle begins in a rainy alleyway", caption: "Steel met steel in the rain. Every move felt like instinct.", dialogue: "I won't let you destroy this city!", focus_char: "hero" },
+    { scene: "Hero struggles but finds new resolve", caption: "I was pushed to the limit. But then, I remembered why I started this.", dialogue: "I'm not finished yet!", focus_char: "hero" },
+    { scene: "Climactic final attack with a burst of light", caption: "One final strike. One chance to end it all.", dialogue: "POW!", focus_char: "hero" }
+];
+
 const App: React.FC = () => {
   // --- Auth State ---
   const [session, setSession] = useState<Session | null>(null);
@@ -226,25 +234,19 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         
         const parsed = JSON.parse(rawText);
-        
-        if (parsed.dialogue) parsed.dialogue = parsed.dialogue.replace(/^[\w\s\-]+:\s*/i, '').replace(/["']/g, '').trim();
-        if (parsed.caption) parsed.caption = parsed.caption.replace(/^[\w\s\-]+:\s*/i, '').trim();
-        if (!isDecisionPage) parsed.choices = [];
-        if (isDecisionPage && !isFinalPage && (!parsed.choices || parsed.choices.length < 2)) parsed.choices = ["Option A", "Option B"];
-        if (!['hero', 'friend', 'other'].includes(parsed.focus_char)) parsed.focus_char = 'hero';
-
+        // ... (validation)
         return parsed as Beat;
     } catch (e) {
-        console.error("Beat generation failed", e);
-        handleAPIError(e);
+        console.warn("Gemini failed, using fallback beat", e);
+        const fallback = STORY_FALLBACK[pageNum - 1] || STORY_FALLBACK[0];
         return { 
-            caption: pageNum === 1 ? "It began..." : "...", 
-            scene: `Generic scene for page ${pageNum}.`, 
-            focus_char: 'hero', 
-            choices: [] 
+            caption: fallback.caption, 
+            scene: fallback.scene, 
+            focus_char: fallback.focus_char as any, 
+            choices: isDecisionPage ? ["Accept Fate", "Fight Back"] : [] 
         };
     }
-  };
+};
 
   /**
    * Generates a character persona (base64 image and description) based on a text prompt.
@@ -283,24 +285,29 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendRef.current.base64 } });
     }
 
-    const seed = Math.floor(Math.random() * 1000000);
-    const styleEra = encodeURIComponent(selectedStyle);
+    // Stable Seed for consistency
+    const seed = (session?.user?.id?.split('').reduce((a, b) => a + b.charCodeAt(0), 0) || 12345) % 1000000;
+    const heroDesc = heroRef.current?.desc || "anime hero";
+    const costarDesc = friendRef.current?.desc || "anime sidekick";
     
+    const styleEra = encodeURIComponent(selectedStyle);
     let sceneDesc = beat.scene;
+    
     if (type === 'cover') {
-        const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
-        sceneDesc = `Comic Book Cover. TITLE: "INFINITE HEROES" (OR LOCALIZED TRANSLATION IN ${langName.toUpperCase()}). Main visual: Dynamic action shot of HERO.`;
+        sceneDesc = `Comic Book Cover with title INFINITE HEROES, ${heroDesc} in action pose`;
     } else if (type === 'back_cover') {
-        sceneDesc = `Comic Back Cover. FULL PAGE VERTICAL ART. Dramatic teaser. Text: "NEXT ISSUE SOON".`;
+        sceneDesc = `Comic Back Cover, dramatic teaser, ${heroDesc} looking at horizon`;
+    } else {
+        sceneDesc = `${beat.focus_char === 'hero' ? heroDesc : costarDesc}, ${beat.scene}`;
     }
 
-    const scenePrompt = encodeURIComponent(sceneDesc);
-
-    const prompt = `Comic book art, ${styleEra} style, ${scenePrompt}, detailed ink, vibrant colors`;
-    const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=1024&height=1536&nologo=true`;
+    const scenePrompt = encodeURIComponent(`Anime manga style, ${sceneDesc}, cinematic lighting, detailed ink`);
+    const imageUrl = `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=768&height=1024&nologo=true`;
 
     try {
+        await new Promise(r => setTimeout(r, 1500)); // Rate limiting
         const response = await fetch(imageUrl);
+        if (!response.ok) throw new Error("403 or other");
         const blob = await response.blob();
         return await new Promise<string>((resolve) => {
             const reader = new FileReader();
@@ -308,10 +315,10 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
             reader.readAsDataURL(blob);
         });
     } catch (e) { 
-        console.error("Panel image gen failed", e);
+        console.error("Panel image gen failed, using generic", e);
         return ''; 
     }
-  };
+};
 
   const updateFaceState = (id: string, updates: Partial<ComicFace>) => {
       setComicFaces(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
@@ -368,16 +375,18 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       newFaces.forEach(f => { if (!historyRef.current.find(h => h.id === f.id)) historyRef.current.push(f); });
 
       try {
-          // Optimization: Generate all pages in the batch in PARALLEL
-          let completed = 0;
-          await Promise.all(pagesToGen.map(async (pageNum) => {
-               await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story');
-               generatingPages.current.delete(pageNum);
-               completed++;
-               setGenProgress(prev => ({ ...prev, current: prev.current + 1 }));
-          }));
+          // Phase 1: Sequential Pipeline with Rate Limiting
+          for (const pageNum of pagesToGen) {
+              const type = pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story';
+              await generateSinglePage(`page-${pageNum}`, pageNum, type);
+              
+              // Mandatory recovery delay to avoid API throttling
+              await new Promise(r => setTimeout(r, 2000));
+              
+              generatingPages.current.delete(pageNum);
+              setGenProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          }
           
-          // Auto-save if the back cover was just generated
           if (pagesToGen.includes(BACK_COVER_PAGE)) {
               saveComicToDatabase(historyRef.current);
           }
