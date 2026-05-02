@@ -355,10 +355,11 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       newFaces.forEach(f => { if (!historyRef.current.find(h => h.id === f.id)) historyRef.current.push(f); });
 
       try {
-          for (const pageNum of pagesToGen) {
+          // Optimization: Generate all pages in the batch in PARALLEL
+          await Promise.all(pagesToGen.map(async (pageNum) => {
                await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story');
                generatingPages.current.delete(pageNum);
-          }
+          }));
           
           // Auto-save if the back cover was just generated
           if (pagesToGen.includes(BACK_COVER_PAGE)) {
