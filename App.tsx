@@ -16,10 +16,14 @@ import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
 // --- Constants ---
-const PRIMARY_MODEL = "gemini-1.5-flash";
-const FALLBACK_MODELS = ["gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-pro"];
+const DEFAULT_TEXT_MODEL = "gemini-1.5-flash";
+const DEFAULT_IMAGE_MODEL = "gemini-1.5-flash";
 
 const App: React.FC = () => {
+  // --- AI Model State ---
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const [bestTextModel, setBestTextModel] = useState(DEFAULT_TEXT_MODEL);
+  const [bestImageModel, setBestImageModel] = useState(DEFAULT_IMAGE_MODEL);
   // --- Auth State ---
   const [session, setSession] = useState<Session | null>(null);
 
@@ -35,6 +39,37 @@ const App: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // --- Discovery Logic ---
+  React.useEffect(() => {
+    const discoverModels = async () => {
+        try {
+            const ai = getAI();
+            const modelsResult = await ai.listModels();
+            const models = modelsResult.models || [];
+            setAvailableModels(models);
+
+            // Filter for models that support generateContent
+            const textModels = models.filter(m => m.supportedGenerationMethods.includes('generateContent'));
+            
+            // Pick best Flash for text
+            const flash = textModels.find(m => m.name.includes('flash') && !m.name.includes('8b'));
+            const flash8b = textModels.find(m => m.name.includes('flash-8b'));
+            const pro = textModels.find(m => m.name.includes('pro'));
+            
+            const selectedText = flash?.name || flash8b?.name || pro?.name || DEFAULT_TEXT_MODEL;
+            setBestTextModel(selectedText.replace('models/', ''));
+            
+            // For images, prioritize models with multimodal/large context or specific names
+            setBestImageModel(selectedText.replace('models/', ''));
+            
+            console.log("🚀 AI Discovery Complete. Best Model:", selectedText);
+        } catch (e) {
+            console.warn("Model discovery failed, using defaults.", e);
+        }
+    };
+    if (import.meta.env.VITE_GEMINI_API_KEY) discoverModels();
   }, []);
 
   // --- API Key Hook ---
@@ -95,21 +130,16 @@ const App: React.FC = () => {
     });
   };
 
-  const runWithFallback = async (method: (model: any) => Promise<any>) => {
+  const runWithFallback = async (task: 'text' | 'image', method: (model: any) => Promise<any>) => {
       const ai = getAI();
-      const models = [PRIMARY_MODEL, ...FALLBACK_MODELS];
-      let lastErr: any = null;
-      
-      for (const mName of models) {
-          try {
-              const model = ai.getGenerativeModel({ model: mName });
-              return await method(model);
-          } catch (e) {
-              lastErr = e;
-              console.warn(`Model ${mName} failed, trying next...`, e);
-          }
+      const mName = task === 'text' ? bestTextModel : bestImageModel;
+      try {
+          const model = ai.getGenerativeModel({ model: mName });
+          return await method(model);
+      } catch (e) {
+          console.error(`Dynamic Model ${mName} failed.`, e);
+          throw e;
       }
-      throw lastErr;
   };
 
   /**
@@ -224,7 +254,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 }
 `;
     try {
-        const res = await runWithFallback((model) => 
+        const res = await runWithFallback('text', (model) => 
             model.generateContent(prompt)
         );
         const response = await res.response;
@@ -260,7 +290,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
   const generatePersona = async (desc: string): Promise<Persona> => {
       const style = selectedGenre === 'Custom' ? "Modern American comic book art" : `${selectedGenre} comic`;
       try {
-          const res = await runWithFallback((model) => 
+          const res = await runWithFallback('image', (model) => 
               model.generateContent(`STYLE: Masterpiece ${style} character sheet, detailed ink, neutral background. FULL BODY. Character: ${desc}`)
           );
           const response = await res.response;
@@ -303,7 +333,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
     contents.push({ text: promptText });
 
     try {
-        const res = await runWithFallback((model) => 
+        const res = await runWithFallback('image', (model) => 
             model.generateContent(contents)
         );
         const response = await res.response;
