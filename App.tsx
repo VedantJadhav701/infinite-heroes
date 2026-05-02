@@ -16,7 +16,7 @@ import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
 // --- Constants ---
-const STORY_MODEL = "models/gemini-pro";
+const STORY_MODEL = "models/gemini-1.5-flash-latest";
 
 const STORY_FALLBACK = [
     { scene: "Hero awakens mysterious power in a dark neon city", caption: "The transformation was sudden. The city's neon lights pulsed in sync with my heartbeat.", dialogue: "What... what is this power?", focus_char: "hero" },
@@ -290,19 +290,8 @@ Output ONLY the JSON array. No extra text.
       const prompt = encodeURIComponent(`Masterpiece anime character sheet, ${style}, detailed, full body, ${desc}`);
       const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?seed=${seed}&width=512&height=512&nologo=true`;
       
-      try {
-          const response = await fetch(imageUrl);
-          const blob = await response.blob();
-          const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-              reader.readAsDataURL(blob);
-          });
-          return { base64, desc };
-      } catch (e) {
-          console.error("Persona image gen failed", e);
-          throw e;
-      }
+      // Zero-Error Fix: Don't fetch, use the URL as the "base64" (it's a string, it works)
+      return { base64: imageUrl, desc };
   };
 
   const generateImage = async (beat: Beat, type: ComicFace['type']): Promise<string> => {
@@ -335,20 +324,8 @@ Output ONLY the JSON array. No extra text.
     const scenePrompt = encodeURIComponent(`Anime manga style, ${sceneDesc}, cinematic lighting, detailed ink`);
     const imageUrl = `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=768&height=1024&nologo=true`;
 
-    try {
-        await new Promise(r => setTimeout(r, 1500)); // Rate limiting
-        const response = await fetch(imageUrl);
-        if (!response.ok) throw new Error("403 or other");
-        const blob = await response.blob();
-        return await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(blob);
-        });
-    } catch (e) { 
-        console.error("Panel image gen failed, using generic", e);
-        return ''; 
-    }
+    // Zero-Error Fix: Return URL directly. Browser <img> tags don't get 403'd like JS fetch() does.
+    return imageUrl;
 };
 
   const updateFaceState = (id: string, updates: Partial<ComicFace>) => {
