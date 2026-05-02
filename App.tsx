@@ -147,8 +147,26 @@ const App: React.FC = () => {
   const generateFullStory = async (userPrompt: string): Promise<Beat[]> => {
       const prompt = `
 Generate a 5-page comic book story: "${userPrompt}".
-Each page MUST have 4 panels.
-Return a JSON object: { "pages": [ { "panels": [ { "scene": "...", "caption": "...", "dialogue": "...", "focus_char": "hero|friend|other" } ], "choices": [] } ] }
+Each page MUST have exactly 4 panels.
+Return JSON:
+{
+  "pages": [
+    {
+      "panels": [
+        {
+          "scene": "Visual description (English)",
+          "caption": "Narrative box text (Target language)",
+          "dialogue": "Short speech (Target language)",
+          "sfx": "Sound effect (e.g. KRKA-DOOM!)",
+          "camera": "close-up | medium | wide",
+          "mood": "dark | intense | calm",
+          "focus_char": "hero | friend | other"
+        }
+      ],
+      "choices": []
+    }
+  ]
+}
 Output ONLY JSON.
 `;
       try {
@@ -177,27 +195,46 @@ Output ONLY JSON.
       return { base64: imageUrl, desc };
   };
 
-  const generateImage = async (sceneDesc: string, focusChar: string): Promise<string> => {
+  const generateImage = async (panel: Panel, retries = 2): Promise<string> => {
     const seed = Math.floor(Math.random() * 1000000);
-    const heroDesc = heroRef.current?.desc || "anime hero";
-    const costarDesc = friendRef.current?.desc || "anime sidekick";
+    const heroDesc = heroRef.current?.desc || "anime hero warrior";
+    const costarDesc = friendRef.current?.desc || "anime sidekick ally";
     
-    const charAnchor = focusChar === 'hero' ? heroDesc : (focusChar === 'friend' ? costarDesc : "");
-    const cleanScene = sceneDesc.replace(/[^a-zA-Z0-9 ]/g, " ").slice(0, 100);
-    const scenePrompt = encodeURIComponent(`${BASE_STYLE}, ${charAnchor}, ${cleanScene}`);
-    return `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=1024&height=1024&nologo=true`;
+    const charAnchor = panel.focus_char === 'hero' ? heroDesc : (panel.focus_char === 'friend' ? costarDesc : "");
+    const cleanScene = panel.scene.replace(/[^a-zA-Z0-9 ]/g, " ").slice(0, 100);
+    const scenePrompt = encodeURIComponent(`
+        ${BASE_STYLE}, 
+        ${panel.camera || "medium"} shot, 
+        ${panel.mood || "intense"} mood, 
+        ${charAnchor}, 
+        ${cleanScene}
+    `);
+    
+    const url = `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=1024&height=1024&nologo=true`;
+    
+    try {
+        const res = await fetch(url, { referrerPolicy: "no-referrer" });
+        if (!res.ok) throw new Error();
+        return url;
+    } catch {
+        if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            return generateImage(panel, retries - 1);
+        }
+        return "https://via.placeholder.com/1024x1024?text=Panel+Sync+Error";
+    }
   };
 
   const composePage = async (beat: Beat): Promise<string> => {
       const canvas = document.createElement('canvas');
-      canvas.width = 1536;
-      canvas.height = 2048;
+      canvas.width = 1024;
+      canvas.height = 1536;
       const ctx = canvas.getContext('2d');
       if (!ctx) return '';
 
       const panels = beat.panels.slice(0, 4);
       const panelImages = await Promise.all(panels.map(async (p) => {
-          const url = await generateImage(p.scene, p.focus_char);
+          const url = await generateImage(p);
           const img = new Image();
           img.crossOrigin = "anonymous";
           img.src = url;
@@ -205,31 +242,53 @@ Output ONLY JSON.
           return img;
       }));
 
-      // Draw 2x2 Grid
-      const w = canvas.width / 2;
-      const h = canvas.height / 2;
-      const padding = 10;
+      const w = canvas.width;
+      const h = canvas.height;
+      const positions = [[0, 0], [w/2, 0], [0, h/2], [w/2, h/2]];
 
       panelImages.forEach((img, i) => {
-          const x = (i % 2) * w;
-          const y = Math.floor(i / 2) * h;
-          ctx.drawImage(img, x + padding, y + padding, w - padding * 2, h - padding * 2);
-          
-          // Draw Borders
-          ctx.strokeStyle = "black";
-          ctx.lineWidth = 8;
-          ctx.strokeRect(x + padding, y + padding, w - padding * 2, h - padding * 2);
-
-          // Draw Text Overlays
+          const [x, y] = positions[i];
           const panel = panels[i];
+          
+          // Draw Image
+          ctx.drawImage(img, x, y, w/2, h/2);
+          
+          // Panel Border
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 10;
+          ctx.strokeRect(x, y, w/2, h/2);
+
+          // 1. Caption (Top Yellow Box)
           if (panel.caption) {
-              ctx.fillStyle = "white";
-              ctx.fillRect(x + 20, y + 20, w - 40, 60);
+              ctx.fillStyle = "rgba(255, 255, 0, 0.9)";
+              ctx.fillRect(x + 10, y + 10, w/2 - 20, 40);
               ctx.strokeStyle = "black";
-              ctx.strokeRect(x + 20, y + 20, w - 40, 60);
+              ctx.lineWidth = 2;
+              ctx.strokeRect(x + 10, y + 10, w/2 - 20, 40);
               ctx.fillStyle = "black";
-              ctx.font = "bold 24px 'Comic Neue'";
-              ctx.fillText(panel.caption.slice(0, 40), x + 40, y + 55);
+              ctx.font = "bold 16px 'Comic Neue'";
+              ctx.fillText(panel.caption.slice(0, 40), x + 20, y + 35);
+          }
+
+          // 2. Dialogue (White Bubble)
+          if (panel.dialogue) {
+              ctx.fillStyle = "white";
+              ctx.fillRect(x + 30, y + h/4, w/2 - 60, 60);
+              ctx.strokeStyle = "black";
+              ctx.strokeRect(x + 30, y + h/4, w/2 - 60, 60);
+              ctx.fillStyle = "black";
+              ctx.font = "bold 18px Arial";
+              ctx.fillText(panel.dialogue.slice(0, 35), x + 40, y + h/4 + 35);
+          }
+
+          // 3. SFX (Bold Comic Text)
+          if (panel.sfx) {
+              ctx.fillStyle = "red";
+              ctx.font = "bold 50px Bangers";
+              ctx.shadowColor = "yellow";
+              ctx.shadowBlur = 10;
+              ctx.fillText(panel.sfx, x + 50, y + h/2 - 50);
+              ctx.shadowBlur = 0; // reset
           }
       });
 

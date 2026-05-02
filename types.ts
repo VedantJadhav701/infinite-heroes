@@ -81,6 +81,9 @@ export interface Panel {
   scene: string;
   caption?: string;
   dialogue?: string;
+  sfx?: string;
+  camera?: string;
+  mood?: string;
   focus_char: 'hero' | 'friend' | 'other';
 }
 
