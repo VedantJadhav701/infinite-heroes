@@ -74,6 +74,14 @@ const App: React.FC = () => {
     });
   };
 
+  /**
+   * Generates a story beat using the Gemini API.
+   * @param history The previous pages' narrative data.
+   * @param isRightPage Whether the current page is on the right side of the book.
+   * @param pageNum The current page number.
+   * @param isDecisionPage Whether this page should present a choice to the user.
+   * @returns A promise that resolves to a Beat object.
+   */
   const generateBeat = async (history: ComicFace[], isRightPage: boolean, pageNum: number, isDecisionPage: boolean): Promise<Beat> => {
     if (!heroRef.current) throw new Error("No Hero");
 
@@ -204,6 +212,11 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
     }
   };
 
+  /**
+   * Generates a character persona (base64 image and description) based on a text prompt.
+   * @param desc The description of the persona to generate.
+   * @returns A promise that resolves to a Persona object.
+   */
   const generatePersona = async (desc: string): Promise<Persona> => {
       const style = selectedGenre === 'Custom' ? "Modern American comic book art" : `${selectedGenre} comic`;
       try {
