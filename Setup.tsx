@@ -54,7 +54,7 @@ const Footer = () => {
             <span className="animate-pulse">{remixes[remixIndex]}</span>
         </div>
         <div className="flex items-center gap-4 mt-2 md:mt-0">
-            <span className="text-white hover:text-yellow-400 transition-colors text-xl font-comic">Vedant Jadhav</span>
+            <span className="text-white hover:text-yellow-400 transition-colors text-xl font-comic">Infinite Heroes | Vedant Jadhav</span>
         </div>
     </div>
   );
