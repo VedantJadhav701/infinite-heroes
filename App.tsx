@@ -219,32 +219,38 @@ Output ONLY JSON.
       return { base64: imageUrl, desc };
   };
 
-  const loadSecureImage = async (url: string): Promise<HTMLImageElement> => {
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            referrerPolicy: 'no-referrer',
-            headers: { 'Accept': 'image/*' }
-        });
-        if (!response.ok) throw new Error(`Cloudflare block: ${response.status}`);
-        const blob = await response.blob();
-        const localUrl = URL.createObjectURL(blob);
-        
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                resolve(img);
-                URL.revokeObjectURL(localUrl);
-            };
-            img.onerror = () => reject(new Error("Decode failed"));
-            img.src = localUrl;
-        });
-    } catch (e) {
-        console.error("Stealth Fetch Failed:", e);
-        const fallback = new Image();
-        fallback.src = FALLBACK_IMAGE_SVG;
-        return new Promise(resolve => { fallback.onload = () => resolve(fallback); });
+  const loadSecureImage = async (rawUrl: string): Promise<HTMLImageElement> => {
+    const proxies = [
+        `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`
+    ];
+
+    for (const proxyUrl of proxies) {
+        try {
+            const response = await fetch(proxyUrl);
+            if (!response.ok) continue;
+            
+            const blob = await response.blob();
+            const localUrl = URL.createObjectURL(blob);
+            
+            return await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    resolve(img);
+                    URL.revokeObjectURL(localUrl);
+                };
+                img.onerror = () => reject(new Error("Decode failed"));
+                img.src = localUrl;
+            });
+        } catch (e) {
+            console.warn(`Proxy failed: ${proxyUrl}`, e);
+        }
     }
+
+    console.error("All proxies failed. Returning fallback.");
+    const fallback = new Image();
+    fallback.src = FALLBACK_IMAGE_SVG;
+    return new Promise(resolve => { fallback.onload = () => resolve(fallback); });
   };
 
   const generateImage = async (panel: Panel): Promise<string> => {

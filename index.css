@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-900 text-white font-sans overflow-x-hidden;
+  }
+}
+
+/* Custom Comic Styles */
+.font-comic {
+  font-family: 'Bangers', cursive;
+}
+
+.comic-btn {
+  @apply font-comic transition-all active:scale-95 cursor-pointer;
+}
+
+.comic-scene {
+  @apply min-h-screen relative flex items-center justify-center;
+}
