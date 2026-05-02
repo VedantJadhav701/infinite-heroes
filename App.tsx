@@ -137,16 +137,7 @@ const App: React.FC = () => {
       return data.choices[0].message.content;
   };
 
-  /**
-   * Generates a story beat using the Gemini API.
-   * @param history The previous pages' narrative data.
-   * @param isRightPage Whether the current page is on the right side of the book.
-   * @param pageNum The current page number.
-   * @param isDecisionPage Whether this page should present a choice to the user.
-   * @returns A promise that resolves to a Beat object.
-   */
-  // Removed generateBeat - Phase 3 now uses generateFullStory exclusively
-};
+  // Phase 3 now uses generateFullStory exclusively
 
   /**
    * Generates the ENTIRE story in one single API call (Phase 3)
