@@ -51,8 +51,8 @@ const Footer = () => {
             <span className="animate-pulse">{remixes[remixIndex]}</span>
         </div>
         <div className="flex items-center gap-4 mt-2 md:mt-0">
-            <span className="text-gray-500 text-sm hidden md:inline">Build with Gemini</span>
-            <a href="https://x.com/ammaar" target="_blank" rel="noopener noreferrer" className="text-white hover:text-yellow-400 transition-colors text-xl">Created by @ammaar</a>
+            <span className="text-gray-500 text-sm hidden md:inline">Built with Gemini</span>
+            <span className="text-white hover:text-yellow-400 transition-colors text-xl font-comic">Infinite Heroes</span>
         </div>
     </div>
   );
