@@ -207,10 +207,11 @@ Output ONLY the JSON. No extra text.
         sceneDesc = `${beat.focus_char === 'hero' ? heroDesc : costarDesc}, ${beat.scene}`;
     }
 
-    const scenePrompt = encodeURIComponent(`Anime manga style, ${sceneDesc}, cinematic lighting, detailed ink`);
+    // Aggressive Sanitization: Remove characters that break URLs or trigger blocks
+    const cleanScene = sceneDesc.replace(/[^a-zA-Z0-9 ]/g, "").slice(0, 150);
+    const scenePrompt = encodeURIComponent(`Anime manga style ${cleanScene} cinematic lighting detailed ink`);
     const imageUrl = `https://image.pollinations.ai/prompt/${scenePrompt}?seed=${seed}&width=768&height=1024&nologo=true`;
 
-    // Zero-Error Fix: Return URL directly. Browser <img> tags don't get 403'd like JS fetch() does.
     return imageUrl;
 };
 
